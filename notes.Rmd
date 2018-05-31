@@ -1,0 +1,16 @@
+---
+title: "notes"
+author: "taras kaduk"
+date: "1/5/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Links
+https://www.ncdc.noaa.gov/data-access/quick-links#gsod
+http://kellegous.com/j/2014/02/03/pleasant-places/
+https://twitter.com/kellegous/status/430466971742650368
+ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.txt - stations
