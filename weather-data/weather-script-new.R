@@ -90,6 +90,7 @@ ggplot(cities_stations) +
 
 
 # Get the weather data ----------------------------------------------------
+## SO, this isn't working... Bummer
 
 year <- "2016"
 
@@ -102,6 +103,7 @@ stations_neeed <- cities_stations %>%
 
 map(stations_neeed$ftp, read_table)
 
+
 year <- 2017
 file <- paste0(station,'-',year)
 station <- '722066-03853'
@@ -110,6 +112,41 @@ ftp_st <- paste0('ftp://ftp.ncdc.noaa.gov/pub/data/gsod/',year,'/',file2,'.op.gz
 destfile <- paste0(file2,'.op.gz')
 
 table <- read_table(ftp_st)
+
+
+
+
+# New attempt -------------------------------------------------------------
+
+## Initial download - uncomment
+# url_gsoy <- "https://www.ncei.noaa.gov/data/gsoy/archive/gsoy-latest.tar.gz"
+# destfile <- "gsoy.tar.gz"
+# curl::curl_download(url_gsoy, destfile)
+# untar(destfile, exdir = "gsoy")
+
+
+
+# this file looks like a tab separated file, however readr doesn't take the \t. 
+# Whitespace does the job, but oblviously breaks things on the city column. 
+# I therefore skip everything after the altitude column, as that data is not important to me
+ghcnd_stations <- read_table2("https://www1.ncdc.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt", 
+                              col_names = c("station", "lat", "lon", "alt"), 
+                              col_types = cols(X5 = col_skip(), 
+                                               X6 = col_skip(), 
+                                               X7 = col_skip(), 
+                                               X8 = col_skip(), 
+                                               X9 = col_skip()
+                                               ))
+
+
+
+
+
+
+
+
+
+
 
 
 
