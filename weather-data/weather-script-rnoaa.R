@@ -103,18 +103,18 @@ stations_needed <- stations_needed_test[1,]
 cities_merge <- cities %>% 
   select(id, latitude, longitude)
 
-for (i in 1:nrow(cities_merge)) {
-  stations_needed[i, ] <- cities_merge[i, ] %>% 
-    select(id, latitude, longitude) %>% 
-    merge(stations %>% select(-alt) %>% 
-            filter(lat <= cities_merge[i,]$latitude + radius &
-                     lat >= cities_merge[i,]$latitude - radius &
-                     lon <= cities_merge[i,]$longitude + radius &
-                     lon >= cities_merge[i, ]$longitude - radius), all = TRUE) %>% 
-    mutate(distance = distHaversine(cbind(longitude, latitude), cbind(lon, lat))) %>% 
-    arrange(distance) %>% 
-    head(1)
-}
+# for (i in 1:nrow(cities_merge)) {
+#   stations_needed[i, ] <- cities_merge[i, ] %>% 
+#     select(id, latitude, longitude) %>% 
+#     merge(stations %>% select(-alt) %>% 
+#             filter(lat <= cities_merge[i,]$latitude + radius &
+#                      lat >= cities_merge[i,]$latitude - radius &
+#                      lon <= cities_merge[i,]$longitude + radius &
+#                      lon >= cities_merge[i, ]$longitude - radius), all = TRUE) %>% 
+#     mutate(distance = distHaversine(cbind(longitude, latitude), cbind(lon, lat))) %>% 
+#     arrange(distance) %>% 
+#     head(1)
+# }
 
 
 
@@ -145,7 +145,7 @@ for (i in 1:nrow(cities_merge)) {
 
 
 
-ggplot(cities_stations) + 
+ggplot(stations_needed) + 
   geom_point(aes(x = lon, y = lat), alpha = 0.1, col = 'red', size = 3) +
   geom_point(aes(x = longitude, y = latitude), alpha = 0.2, col = 'blue') +
   theme_light()
@@ -165,17 +165,18 @@ file.remove(files_remove)
 setwd("..")
 
 file_left <-  list.files(path = "gsoy")
-
 file.remove(destfile)
+rm(list= ls()[!(ls() %in% c('cities','stations_needed', 'stations_needed_dist'))])
 
 
+##Attention!!! May blow uP!
+options(warn=-1)
+weather_data <- map_df(paste0("gsoy/",stations_needed_dist), read_csv, col_types = cols(.default = "c"))
+options(warn=0)
 
+write_csv(weather_data, "weather_data.csv")
 
-
-
-
-
-
+file.remove("gsoy")
 
 
 
