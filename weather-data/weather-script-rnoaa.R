@@ -171,15 +171,47 @@ rm(list= ls()[!(ls() %in% c('cities','stations_needed', 'stations_needed_dist'))
 
 ##Attention!!! May blow uP!
 options(warn=-1)
-weather_data <- map_df(paste0("gsoy/",stations_needed_dist), read_csv, col_types = cols(.default = "c"))
+weather_data_raw <- map_df(paste0("gsoy/",stations_needed_dist), read_csv, col_types = cols(.default = "c"))
 options(warn=0)
 
-write_csv(weather_data, "weather_data.csv")
+
+write_csv(weather_data_raw[1:200000,], "weather_data_raw1.csv")
+write_csv(weather_data_raw[200001:400000,], "weather_data_raw2.csv")
+write_csv(weather_data_raw[400001:nrow(weather_data),], "weather_data_raw3.csv")
 
 file.remove("gsoy")
 
 
+## Guide: https://www.ncei.noaa.gov/data/gsoy/doc/GSOYReadme.txt
 
+weather_data <- weather_data_raw %>% 
+  select(station = STATION,
+         date = DATE,
+         lat = LATITUDE,
+         lon = LONGITUDE,
+         alt = ELEVATION,
+         name = NAME,
+         heating_days = HTDD,
+         cooling_days = CLDD,
+         precip_days = DP10,
+         snow_days = DSND,
+         days_xcold = DT00,
+         days_cold = DT32,
+         days_hot = DX70,
+         days_xhot = DX90,
+         temp_extreme_min = EMNT,
+         temp_extreme_max = EMXT,
+         precip_extreme = EMXP,
+         precip_total = PRCP,
+         sunshine_total_chance = PSUN, #%
+         snow_total = SNOW,
+         temp_avg = TAVG,
+         temp_max_avg = TMAX,
+         temp_min_avg = TMIN,
+         sunshine_total = TSUN #in minutes
+  )
+
+write_csv(weather_data, "weather_data.csv")
 
 
 
