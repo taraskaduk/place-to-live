@@ -66,15 +66,167 @@ ggplot() +
  curl::curl_download(url_gsoy, destfile)
  untar(destfile, exdir = "gsoy")
 
-
 files_all <- list.files(path = "gsoy")
 
+# Filter stations by coordinates ------------------------------------------
+
+stations_usa <- stations_import %>% 
+  mutate(country = map.where('world', lon, lat)) %>% #USA doesn't include AK, HI, PR
+  filter((str_detect(country, "USA") == TRUE | str_detect(country, "Puerto Rico") == TRUE) & lon < 0 )
+
+ggplot(stations_usa, aes(x=lon, y= lat)) + 
+  geom_point(size = 0.1, alpha = 0.2) +
+  coord_fixed()
+
+# stations_usa <- stations_import %>% 
+#   filter(lat <= max(cities$latitude) &
+#            lat >= min(cities$latitude) &
+#            lon <= max(cities$longitude) &
+#            lon >= min(cities$longitude)
+#   )
+
+
+
 # Subset leaving only stations for which we have the data
-stations <- stations_import %>% 
+stations_usa_avail <- stations_usa %>% 
   mutate(file = paste0(station,".csv")) %>% 
   filter(file %in% files_all)
 
-remove(stations_import)
+files_keep <- stations_usa_avail$file
+files_remove <- subset(files_all, !(files_all %in% files_keep))
+
+file.remove(paste0("gsoy/",files_remove))
+
+
+# Subset leaving only stations with fresh data ----------------------------
+
+stations_year <- map_df(paste0("gsoy/",files_keep), read_csv, col_types = cols_only(STATION = col_character(),
+                                                                                   DATE = col_integer()
+                                                                                   ))
+stations_year_sum <- stations_year %>% 
+  rename(station = STATION,
+         date = DATE) %>% 
+  filter(date >= 2008) %>% 
+  group_by(station) %>% 
+  summarise(date_max = max(date),
+            n = n()) %>% 
+  filter(n > 4) %>% 
+  mutate(file = paste0(station, ".csv"))
+
+files_all2 <- list.files(path = "gsoy")
+files_keep2 <- stations_year_sum$file
+files_remove2 <- subset(files_all2, !(files_all2 %in% files_keep2))
+file.remove(paste0("gsoy/",files_remove2))
+
+stations_avail <- stations_usa_avail %>% 
+  filter(file %in% files_keep2)
+
+
+
+# Round up ----------------------------------------------------------------
+
+stations <- stations_avail %>% 
+  mutate(lat_round = round(lat*4,0)/4,
+         lon_round = round(lon*4,0)/4)
+
+ggplot(stations, aes(x=lon_round, y= lat_round)) + 
+  geom_point(size = 0.1, alpha = 0.2) +
+  coord_fixed()
+
+
+
+
+
+# Import files ------------------------------------------------------------
+
+weather_data_raw <- map_df(paste0("gsoy/",files_keep2), 
+                           read_csv,
+                           col_types = cols_only(STATION = col_character(),
+                                                 NAME = col_character(), 
+                                                 DATE = col_character(), 
+                                                 LATITUDE = col_double(), 
+                                                 LONGITUDE = col_double(), 
+                                                 ELEVATION = col_double(),
+                                                 HTDD = col_double(),
+                                                 CLDD = col_double(),
+                                                 DP10 = col_integer(),
+                                                 DSND = col_integer(),
+                                                 DT00 = col_integer(),
+                                                 DT32 = col_integer(),
+                                                 DX70 = col_integer(),
+                                                 DX90 = col_integer(),
+                                                 EMNT = col_double(),
+                                                 EMXT = col_double(),
+                                                 EMXP = col_double(),
+                                                 PRCP = col_double(),
+                                                 PSUN = col_double(), #%
+                                                 SNOW = col_double(),
+                                                 TAVG = col_double(),
+                                                 TMAX = col_double(),
+                                                 TMIN = col_double(),
+                                                 TSUN = col_double()))
+
+
+
+
+
+write_csv(weather_data_raw[1:200000,], "weather_data_raw1.csv")
+write_csv(weather_data_raw[200001:nrow(weather_data_raw),], "weather_data_raw2.csv")
+
+
+## Guide: https://www.ncei.noaa.gov/data/gsoy/doc/GSOYReadme.txt
+
+weather_data <- weather_data_raw %>% 
+  select(station = STATION,
+         date = DATE,
+         lat = LATITUDE,
+         lon = LONGITUDE,
+         alt = ELEVATION,
+         name = NAME,
+         heating_days = HTDD,
+         cooling_days = CLDD,
+         precip_days = DP10,
+         snow_days = DSND,
+         days_xcold = DT00,
+         days_cold = DT32,
+         days_hot = DX70,
+         days_xhot = DX90,
+         temp_extreme_min = EMNT,
+         temp_extreme_max = EMXT,
+         precip_extreme = EMXP,
+         precip_total = PRCP,
+         sunshine_total_chance = PSUN, #%
+         snow_total = SNOW,
+         temp_avg = TAVG,
+         temp_max_avg = TMAX,
+         temp_min_avg = TMIN,
+         sunshine_total = TSUN #in minutes
+  )
+
+write_csv(weather_data, "weather_data.csv")
+# weather_data <- read_csv("weather_data.csv")
+
+
+
+
+# Group by coord ----------------------------------------------------------
+
+weather_by_coord <- weather_data %>% 
+  mutate(lat_round = round(lat*4,0)/4,
+         lon_round = round(lon*4,0)/4) %>% 
+  select(-c(lat, lon, alt)) %>% 
+  group_by(lat_round, lon_round) %>% 
+  summarise_if(is.numeric, mean, na.rm = TRUE)
+
+
+ggplot(weather_by_coord, aes(x=lon_round, y= lat_round, col = precip_total)) + 
+  geom_point(size = 1) +
+  coord_fixed() +
+  theme_void() +
+  scale_color_continuous(high = "red", low = "blue", na.value = "grey90")
+
+
+
 
 # Test before creating a map of purrr -------------------------------------
 
@@ -117,13 +269,16 @@ cities_merge <- cities %>%
 # }
 
 
-
+ggplot() + 
+  geom_point(data = stations, aes(x = lon, y = lat), alpha = 0.1, size = 0.4, col = 'red') +
+  geom_point(data = cities, aes(x = longitude, y = latitude), alpha = 0.2, size = 0.1, col = 'blue') +
+  theme_light()
 
 
 
 ## Far far away
 for (i in 1:nrow(cities_merge)) {
-  for (radius in seq(0.1, 3.1, by = 0.5)) {
+  for (radius in seq(0.1, 10, by = 1)) {
     stations_merge <- stations %>% select(-alt) %>% 
       filter(lat <= cities_merge[i,]$latitude + radius &
                lat >= cities_merge[i,]$latitude - radius &
@@ -212,6 +367,9 @@ weather_data <- weather_data_raw %>%
   )
 
 write_csv(weather_data, "weather_data.csv")
+
+
+weather_data <- read_csv("weather_data.csv")
 
 
 
