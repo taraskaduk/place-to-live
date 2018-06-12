@@ -14,3 +14,9 @@ https://www.ncdc.noaa.gov/data-access/quick-links#gsod
 http://kellegous.com/j/2014/02/03/pleasant-places/
 https://twitter.com/kellegous/status/430466971742650368
 ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.txt - stations
+
+
+https://www.zillow.com/research/pleasant-days-methodology-8513/
+https://r-video-tutorial.blogspot.com/2014/12/accessing-cleaning-and-plotting-noaa.html
+
+https://www.wired.com/2014/02/see-u-s-cities-get-least-days-pleasant-weather/

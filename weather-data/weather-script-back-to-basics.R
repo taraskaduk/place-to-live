@@ -133,3 +133,68 @@ write_csv(data_us, "data_us.csv")
 
 file.remove(destfile)
 unlink(file, recursive = TRUE) 
+
+
+
+
+
+# CSV ---------------------------------------------------------------------
+data_us <- read_csv("data_us.csv")
+
+weather_daily <- data_us %>% 
+  mutate(lat.0 = round(lat,0),
+         lon.0 = round(lon,0)) %>% 
+  select(-c(state, lat, lon, stn, wban)) %>% 
+  group_by(lat.0, lon.0, date) %>% 
+  summarise_all(mean, na.rm=TRUE) %>% 
+  ungroup()
+
+weather_daily %>%   
+  group_by(lat.0, lon.0) %>% 
+  summarise(n = n()) %>% 
+  mutate(complete = if_else(n==365, 1, 0)) %>% 
+  ggplot(aes(x=lon.0, y=lat.0, col=complete)) + geom_point()
+
+weather_daily %>%   
+  group_by(lat.0, lon.0) %>% 
+  summarise(n = n()) %>% 
+  mutate(complete = if_else(n==365, 1, 0)) %>% 
+  ggplot(aes(x=n)) + geom_histogram()
+
+
+weather_daily %>%   
+  group_by(lat.0, lon.0) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  group_by(n) %>% 
+  summarise(count = n())
+
+
+weather_daily %>%   
+  ggplot(aes(x=prcp)) + geom_histogram()
+
+weather_daily_pleasant <- weather_daily %>% 
+  mutate(pleasant = if_else(temp_min >= 45 &
+                              temp_max <= 85 &
+                              (temp_mean >= 55 | temp_mean <=75) &
+                              sndp < 1 &
+                              prcp < 0.1,
+                            1,
+                            0))
+
+weather_daily_pleasant %>% 
+  filter(lat.0 == 48 & lon.0 == -122) %>% 
+  ggplot(aes(x=date, y = temp_mean, col = as.factor(pleasant))) + 
+  geom_point()
+
+weather_daily_pleasant %>% 
+  group_by(lon.0, lat.0) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+ggplot(aes(x=lon.0, y=lat.0, col=pleasant)) + 
+  geom_point() + 
+  scale_color_continuous(low='red', high='green')
+
+ 
+ggplot(weather_daily_pleasant, aes(x=lon.0, y=lat.0, z = pleasant)) + 
+  stat_summary_2d(aes(col = stat(value)), fun = 'sum', binwidth = 1, geom = 'point') +
+  scale_color_continuous(low='red', high='green')
