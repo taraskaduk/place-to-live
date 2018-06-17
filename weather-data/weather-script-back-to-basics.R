@@ -16,6 +16,8 @@ cities <- read_csv(url_cities) %>%
   rename(latitude = lat,
          longitude = lng)
 
+write_csv(cities, "cities.csv")
+
 ggplot(cities, aes(x = longitude, y = latitude)) + 
   geom_point(alpha = 0.2, size = 0.1) +
   theme_light()
