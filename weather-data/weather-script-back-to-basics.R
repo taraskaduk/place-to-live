@@ -224,8 +224,9 @@ weather_daily_pleasant %>%
   summarise(pleasant = sum(pleasant)) %>% 
 ggplot(aes(x=lon.0, y=lat.0, col=pleasant)) + 
   geom_point(size = 3) + 
-  scale_color_continuous(low='red', high='darkgreen') +
+  scale_color_continuous(low='white', high='red') +
   theme_void()
+
 
 weather_daily_pleasant %>% 
   group_by(lon.0, lat.0) %>% 
@@ -235,14 +236,28 @@ weather_daily_pleasant %>%
                                               TRUE ~ 1))) %>% 
   ggplot(aes(x=lon.0, y=lat.0, col=pleasant_group)) + 
   geom_point(size = 4) + 
-  theme_void()
+  theme_void() +
+  coord_map(projection = "albers", lat_0=45, lon_0=-100)
 
  
-ggplot(weather_daily_pleasant, aes(x=lon.0, y=lat.0, z = pleasant)) + 
-  stat_summary_2d(aes(col = stat(value)), fun = 'sum', binwidth = 1, geom = 'point') +
-  scale_color_continuous(low='red', high='green')
 
 
+
+
+transposed <- weather_daily_pleasant %>% 
+  mutate(lat = if_else(lon.0 < -125 & lat.0 >48, lat.0 -50, lat.0),
+         lon = if_else(lon.0 < -125 & lat.0 >48, lon.0 + 50, lon.0))
+
+
+
+transposed %>% 
+  group_by(lon, lat) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+  ggplot(aes(x=lon, y=lat, col=pleasant)) + 
+  geom_point(size = 3) + 
+  scale_color_continuous(low='white', high='darkblue') +
+  theme_void() +
+  coord_map(projection = "albers", lat_0=45, lon_0=-100)
 
 # Cities ------------------------------------------------------------------
 
@@ -252,7 +267,7 @@ cities <- read_csv(url_cities) %>%
   rename(latitude = lat,
          longitude = lng)
 
-write_csv(cities, "cities.csv")
+write_csv(cities, "data/cities.csv")
 
 ggplot(cities, aes(x = longitude, y = latitude)) + 
   geom_point(alpha = 0.2, size = 0.1) +
