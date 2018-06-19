@@ -36,12 +36,15 @@ stations <- stations_import %>%
 
 write_csv(stations, "data/stations.csv")
 
+stations_us <- stations %>% 
+  filter(ctry == "US")
 
 # Data --------------------------------------------------------------------
 
 weather_data <- NULL
+weather_data_raw <- NULL
 
-for (year in 2014:2017) {
+for (year in 2012:2017) {
 
   file <- paste0('gsod_',year)
 
@@ -51,52 +54,45 @@ for (year in 2014:2017) {
   curl::curl_download(ftp, destfile)
   untar(destfile, exdir = file)
 
-  data_all <- map_df(list.files(file, full.names = TRUE),
+  data_raw <- map_df(list.files(file, full.names = TRUE),
                      read_table,
                      col_types = cols(.default = "c",
                                       YEARMODA = col_date(format = "%Y%m%d")),
                      na = c("9999.9", '99.99', '999.9', '0.00I')
                      )
-
-  colnames(data_all) <- tolower(colnames(data_all))
-
-  data_clean <- data_all %>%
-    # rename columns
-    select(stn = `stn---`, wban, date = yearmoda, temp_mean = temp, temp_min = min, temp_max = max, prcp, sndp) %>%
-    # clean up asterisks and flags
-    # (see data description for details)
-    map_df(~ str_replace_all(.,'A|B|C|D|E|F|G|H|I|\\*', '')) %>%
-    # convert some columns to numeric after cleaning up
-    map_at(c('temp_mean', 'temp_min', 'temp_max', 'prcp', 'sndp'), as.numeric) %>%
-    dplyr::bind_rows() %>%
-    # precipitation and snowfall NAs can be converted to 0 for this project
-    # (see data description for details)
-    replace_na(replace = list(prcp = 0, sndp = 0))
+  colnames(data_raw) <- tolower(colnames(data_raw))
+  data_raw <- data_raw %>%
+    rename(stn = `stn---`, date = yearmoda, temp_mean = temp, temp_min = min, temp_max = max)
   
-  weather_data <- rbind(weather_data, data_clean)
-
-  # data_us <- data_clean %>%
-  #   inner_join(stations_us, by = c('stn' = 'usaf'))
-  # 
-  # data_us %>%
-  #   select(lat, lon, stn) %>%
-  #   distinct() %>%
-  #   ggplot(aes(x=lon, y = lat)) + geom_point(size = 0.25, alpha = 0.1)
-  # 
-  # data_us %>%
-  #   mutate(latr = round(lat*4,0)/4,
-  #          lonr = round(lon*4,0)/4) %>%
-  #   select(latr, lonr, stn) %>%
-  #   distinct() %>%
-  #   ggplot(aes(x=lonr, y = latr)) + geom_point(size = 0.25, alpha = 0.8)
-
-
-  # write_csv(data_clean, paste0("data/data_clean_", year, ".csv"))
-
+  weather_data_raw <- rbind(weather_data_raw, data_raw)
   file.remove(destfile)
   unlink(file, recursive = TRUE)
 
 }
 
 
-save(cities, stations, weather_data, file = "data/data.RData")
+data_raw_us <- weather_data_raw %>%
+  semi_join(stations_us, by = c('stn' = 'usaf', 'wban'))
+
+save(data_raw_us, file = "data/data_raw.RData")
+
+
+
+load("data/data_raw.RData")
+weather_data <- data_raw_us %>%
+  # rename columns
+  select(stn, wban, date, temp_mean, temp_min, temp_max, prcp, sndp) %>%
+  # clean up asterisks and flags
+  # (see data description for details)
+  map_df(~ str_replace_all(.,'A|B|C|D|E|F|G|H|I|\\*', '')) %>%
+  # convert some columns to numeric after cleaning up
+  map_at(c('temp_mean', 'temp_min', 'temp_max', 'prcp', 'sndp'), as.numeric, na.rm = TRUE) %>%
+  dplyr::bind_rows() %>% 
+  # precipitation and snowfall NAs can be converted to 0 for this project
+  # (see data description for details)
+  # or maybe not...
+  replace_na(replace = list(prcp = 0, sndp = 0))
+
+
+
+save(cities, stations_us, weather_data, file = "data/data.RData")
