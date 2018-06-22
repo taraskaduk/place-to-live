@@ -1,3 +1,7 @@
+# gsod source files
+gsod/
+
+
 # History files
 .Rhistory
 .Rapp.history
