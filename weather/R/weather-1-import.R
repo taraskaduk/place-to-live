@@ -1,5 +1,7 @@
 library(tidyverse)
 
+setwd("weather")
+
 # Stations -----------------------------------------------------------------
 
 # path_stations <- "ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.txt"

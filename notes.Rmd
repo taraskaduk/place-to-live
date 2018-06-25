@@ -20,3 +20,5 @@ https://www.zillow.com/research/pleasant-days-methodology-8513/
 https://r-video-tutorial.blogspot.com/2014/12/accessing-cleaning-and-plotting-noaa.html
 
 https://www.wired.com/2014/02/see-u-s-cities-get-least-days-pleasant-weather/
+
+https://www.kaggle.com/noaa/gsod/data

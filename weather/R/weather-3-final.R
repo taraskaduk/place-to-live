@@ -5,6 +5,8 @@ library(maps)
 library(ggthemes)
 library(scales)
 
+setwd("weather")
+
 # Import ------------------------------------------------------------------
 
 load("data/2-tidy.RData")
@@ -13,13 +15,25 @@ load("data/1-locations.RData")
 # Transform --------------------------------------------------------------------
 
 
+# https://www.coynecollege.edu/news-events/ideal-temperatures-heat-cool
+# https://weather.com/news/news/how-hot-is-too-hot-survey
+# https://en.wikipedia.org/wiki/Rain#Intensity
+
+
+p_temp_max <- 85
+p_temp_min <- 50 #lowest for only one extra layer of clothing
+p_temp_mean_low <- 65
+p_temp_mean_high <- 75
+p_prcp <- 0.1
+p_sndp <- 1
+
 
 w_pleasant <- w_filled %>% 
-  mutate(pleasant = if_else(temp_min >= 40 & #was 45
-                              temp_max <= 80 &  #was 85
-                              (temp_mean >= 50 | temp_mean <=70) & #was 55
-                              sndp < 1 & # how to determine this?
-                              prcp < 0.1,
+  mutate(pleasant = if_else(temp_min >= p_temp_min &
+                              temp_max <= p_temp_max &
+                              (temp_mean >= p_temp_mean_low | temp_mean <= p_temp_mean_high) & 
+                              sndp < p_sndp & # how to determine this?
+                              prcp < p_prcp,
                             1,
                             0),
          rainy = if_else(prcp > 0.1, 1, 0),

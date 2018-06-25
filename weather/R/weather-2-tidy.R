@@ -5,6 +5,8 @@ library(maps)
 library(ggthemes)
 library(scales)
 
+setwd("weather")
+
 # Import ------------------------------------------------------------------
 
 load("data/1-import.RData")

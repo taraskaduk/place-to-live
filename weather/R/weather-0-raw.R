@@ -1,5 +1,7 @@
 library(tidyverse)
 
+setwd("weather")
+
 # Cities ------------------------------------------------------------------
 
 curl::curl_download('https://simplemaps.com/static/data/us-cities/uscitiesv1.4.csv', destfile = "data/0-raw/uscitiesv1.4.csv")

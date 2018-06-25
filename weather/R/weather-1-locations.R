@@ -1,6 +1,8 @@
 library(tidyverse)
 library(jsonlite)
 
+setwd("weather")
+
 path_raw <- "data/0-raw/"
 path_top1000 <- paste0(path_raw, "cities.json")
 loc_top1000 <- fromJSON(path_top1000) %>% 
