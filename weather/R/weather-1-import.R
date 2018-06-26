@@ -53,7 +53,7 @@ for (year in 2012:2017) {
                      read_table,
                      col_types = cols(.default = "c",
                                       YEARMODA = col_date(format = "%Y%m%d")),
-                     na = c("9999.9", '99.99', '999.9', '0.00I')
+                     na = c("9999.9", '99.99', '999.9')
   )
   
   colnames(data_raw) <- tolower(colnames(data_raw))
@@ -68,19 +68,32 @@ for (year in 2012:2017) {
 }
 
 weather_data <- weather_data_raw %>%
-  # rename columns
-  select(stn, wban, date, temp_mean, temp_min, temp_max, prcp, sndp) %>%
-  # clean up asterisks and flags
-  # (see data description for details)
+  select(stn, wban, date, temp_mean, temp_min, temp_max, precip = prcp, snow = sndp, pressure = stp, wind = wdsp, gust, frshtt) %>%
+  mutate(prcp_hours = case_when(str_detect(precip, "A") ~ 6,
+                           str_detect(precip, "B") ~ 12,
+                           str_detect(precip, "C") ~ 18,
+                           str_detect(precip, "D") ~ 24,
+                           str_detect(precip, "E") ~ 12,
+                           str_detect(precip, "F") ~ 24,
+                           str_detect(precip, "G") ~ 24,
+                           str_detect(precip, "H") ~ 1,
+                           str_detect(precip, "I") ~ 1,
+                           TRUE ~ NA_real_)) %>% 
   map_df(~ str_replace_all(.,'A|B|C|D|E|F|G|H|I|\\*', '')) %>%
-  # convert some columns to numeric after cleaning up
-  map_at(c('temp_mean', 'temp_min', 'temp_max', 'prcp', 'sndp'), as.numeric, na.rm = TRUE) %>%
+  map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', 'prcp_hours', 'gust', 'wind', 'pressure'), as.numeric, na.rm = TRUE) %>%
   dplyr::bind_rows() %>% 
   # precipitation and snowfall NAs can be converted to 0 for this project
   # (see data description for details)
-  # or maybe not...
-  replace_na(replace = list(prcp = 0, sndp = 0))
-
+  # except for the one notated with an I
+  replace_na(replace = list(precip = 0, snow = 0)) %>% 
+  mutate(precip = precip / prcp_hours) %>% 
+  mutate(is_fog     = as.integer(substr(frshtt, 1,1)),
+         is_rain    = as.integer(substr(frshtt, 2,2)),
+         is_snow    = as.integer(substr(frshtt, 3,3)),
+         is_hail    = as.integer(substr(frshtt, 4,4)),
+         is_thunder = as.integer(substr(frshtt, 5,5)),
+         is_tornado = as.integer(substr(frshtt, 6,6))) %>% 
+  select(-frshtt, -prcp_hours)
 
 
 #############

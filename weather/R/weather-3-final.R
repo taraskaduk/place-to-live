@@ -21,24 +21,91 @@ load("data/1-locations.RData")
 
 
 p_temp_max <- 85
-p_temp_min <- 50 #lowest for only one extra layer of clothing
-p_temp_mean_low <- 65
+p_temp_min <- 45 #lowest for only one extra layer of clothing
+p_temp_mean_low <- 55
 p_temp_mean_high <- 75
-p_prcp <- 0.1
-p_sndp <- 1
+p_precip <- 0.3
 
 
 w_pleasant <- w_filled %>% 
   mutate(pleasant = if_else(temp_min >= p_temp_min &
                               temp_max <= p_temp_max &
-                              (temp_mean >= p_temp_mean_low | temp_mean <= p_temp_mean_high) & 
-                              sndp < p_sndp & # how to determine this?
-                              prcp < p_prcp,
+                              temp_mean >= p_temp_mean_low & temp_mean <= p_temp_mean_high & 
+                              precip < p_precip &
+                              is_rain == 0 &
+                              is_tornado == 0 &
+                              #is_snow == 0 &
+                              is_hail == 0,
                             1,
                             0),
-         rainy = if_else(prcp > 0.1, 1, 0),
-         hot = if_else(temp_max > 80, 1, 0),
-         xhot = if_else(temp_max > 90, 1, 0)) %>% 
+         hot = if_else(temp_max > p_temp_max |
+                         temp_mean > p_temp_mean_high,
+                       1,
+                       0),
+         cold = if_else(temp_min < p_temp_min |
+                          temp_mean < p_temp_mean_low,
+                        1,
+                        0),
+         elements = if_else(is_rain == 1 | is_snow == 1 | is_hail == 1 |
+                              precip > 0.3 |
+                              snow > 0, 
+                            1, 0),
+         unpleasant = case_when(pleasant == 1 ~ "pleasant",
+                                hot == 1      ~ "hot",
+                                elements == 1 ~ "elements",
+                                cold == 1     ~ "cold",
+                                TRUE          ~ NA_character_))
+
+msa_pleasant <- loc_msa %>% 
+  left_join(w_pleasant, by = c("lat.0", "lon.0"))
+
+
+msa_pleasant %>% 
+  filter(name == "Jacksonville, FL") %>% 
+ggplot(aes(x=date, alpha = as.factor(pleasant))) +
+  geom_point(aes(y = temp_mean), col = "grey")+
+  geom_point(aes(y = temp_max), col = "red") +
+  geom_point(aes(y = temp_min), col = "blue") +
+  facet_wrap(~ year, scales = "free")
+
+
+msa_pleasant %>% 
+  filter(year == 2017 &
+         name %in% c("Seattle-Tacoma-Bellevue, WA", 
+                     "Jacksonville, FL",
+                     "San Diego-Carlsbad, CA",
+                     "New York-Newark-Jersey City, NY-NJ-PA",
+                     "Los Angeles-Long Beach-Anaheim, CA")) %>% 
+  ggplot(aes(x=day, y = as.factor(month), fill = unpleasant), col = grey) +
+  geom_tile() +
+  facet_wrap(~name) +
+  theme_bw() + 
+  scale_fill_brewer(type = "div")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+
+msa_pleasant %>% 
+  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
+  ggplot(aes(x=day, y = year, fill = elements), col = grey) +
+  geom_tile() +
+  facet_wrap( ~ month) +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+msa_pleasant %>% 
+  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
+  ggplot(aes(x=day, y = year, fill = precip), col = grey) +
+  geom_tile() +
+  facet_wrap( ~ month) +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+
+
+w_pleasant_summar <- w_pleasant %>% 
   group_by(lat.0, lon.0, year) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
@@ -55,9 +122,9 @@ w_pleasant <- w_filled %>%
 
 
 ggplot() + 
-  geom_point(data = w_pleasant %>% filter(pleasant_cat == "Over 300"), aes(x=lon.0, y=lat.0), col = "red", size = 9, alpha = 0.4) +
-  geom_point(data = w_pleasant %>% filter(pleasant_cat == "200 - 299"), aes(x=lon.0, y=lat.0), col = "red", size = 8, alpha = 0.3) +
-  geom_point(data = w_pleasant, aes(x=lon.0, y=lat.0, col=pleasant_cat), size = 6) +
+  geom_point(data = w_pleasant_summar %>% filter(pleasant_cat == "Over 300"), aes(x=lon.0, y=lat.0), col = "red", size = 9, alpha = 0.4) +
+  geom_point(data = w_pleasant_summar %>% filter(pleasant_cat == "200 - 299"), aes(x=lon.0, y=lat.0), col = "red", size = 8, alpha = 0.3) +
+  geom_point(data = w_pleasant_summar, aes(x=lon.0, y=lat.0, col=pleasant_cat), size = 6) +
 #  scale_color_brewer(type = "seq", name = "Pleasant days") +
   scale_colour_manual(values = c("grey90", "#c6dbef", "#4292c6", "#2171b5", "#08306b"), name = "Pleasant days") +
   theme_fivethirtyeight() +
@@ -83,8 +150,8 @@ dots <- dots %>%
 
 ggplot() + 
   geom_point(data = dots, aes(x=lon.0, y = lat.0), col = "grey90", size = 6) +
-  geom_point(data = w_pleasant, aes(x=lon.0, y=lat.0, col=pleasant), size = 6, alpha = 0.4) +
-  geom_point(data = w_pleasant, aes(x=lon.0, y=lat.0, col=pleasant, alpha = pleasant), size = 6) + 
+  geom_point(data = w_pleasant_summar, aes(x=lon.0, y=lat.0, col=pleasant), size = 6, alpha = 0.4) +
+  geom_point(data = w_pleasant_summar, aes(x=lon.0, y=lat.0, col=pleasant, alpha = pleasant), size = 6) + 
   
   scale_colour_gradient2(low = "grey85",
                          high = "darkblue",
@@ -112,7 +179,7 @@ ggplot() +
 w_msa <- loc_msa %>% 
   #filter(!(state %in% c("AK", "HI", "PR", "VI"))) %>% 
   # select(id, city = city_ascii, state = state_id, lat.0, lon.0, lat, lon) %>% 
-  left_join(w_pleasant, by = c("lat.0", "lon.0")) %>% 
+  left_join(w_pleasant_summar, by = c("lat.0", "lon.0")) %>% 
   mutate(pleasant_cat = case_when(pleasant >=200 ~ "Over 200",
                                   pleasant >=150 ~ "150 - 199",
                                   pleasant >=100 ~ "100 - 149",

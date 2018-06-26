@@ -32,7 +32,7 @@ w_mutated <- weather %>%
   group_by(lat.0, lon.0, date, year, month, day) %>% 
   summarise_all(mean, na.rm = TRUE) %>% 
   ungroup() %>% 
-  purrr::map_at(c('temp_mean', 'temp_min', 'temp_max', 'prcp', 'sndp'), ~ifelse(is.nan(.x), NA, .x)) %>% 
+  purrr::map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', 'pressure', 'wind', 'gust'), ~ifelse(is.nan(.x), NA, .x)) %>% 
   bind_rows()
   
 
@@ -62,11 +62,13 @@ w_missing <- w_expanded %>%
   filter(is.na(temp_mean))
 
 w_filldown <- w_expanded %>% 
-  fill(temp_mean, temp_min, temp_max, prcp, sndp, .direction = "down") %>% 
+  fill(temp_mean, temp_min, temp_max, precip, snow, wind, gust, 
+       is_rain, is_tornado, is_hail, is_snow,  .direction = "down") %>% 
   semi_join(w_missing, by = c("date", "lat.0", "lon.0"))
 
 w_fillup <- w_expanded %>% 
-  fill(temp_mean, temp_min, temp_max, prcp, sndp, .direction = "up") %>% 
+  fill(temp_mean, temp_min, temp_max, precip, snow, wind, gust, 
+       is_rain, is_tornado, is_hail, is_snow, .direction = "up") %>% 
   semi_join(w_missing, by = c("date", "lat.0", "lon.0"))
 
 w_fill_mean <- union_all(w_filldown, w_fillup) %>% 
@@ -75,6 +77,9 @@ w_fill_mean <- union_all(w_filldown, w_fillup) %>%
 
 w_filled <- w_expanded %>% 
   anti_join(w_missing, by = c("date", "lat.0", "lon.0")) %>% 
-  union_all(w_fill_mean)
+  union_all(w_fill_mean) %>% 
+  purrr::map_at(c('is_rain', 'is_snow', 'is_hail', 'is_tornado', 'is_fog', 'is_thunder'), ~if_else(.x < 0.1, 0, 1)) %>% 
+  bind_rows()
+  
 
 save(w_filled, file = "data/2-tidy.RData")
