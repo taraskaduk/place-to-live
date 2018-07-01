@@ -34,7 +34,6 @@ w_mutated <- weather %>%
   ungroup() %>% 
   purrr::map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', 'pressure', 'wind', 'gust'), ~ifelse(is.nan(.x), NA, .x)) %>% 
   bind_rows()
-  
 
 
 check_completion <- w_mutated %>% 
@@ -43,7 +42,7 @@ check_completion <- w_mutated %>%
   filter(n >= 365*0.9)
 
 coords <- check_completion %>% 
-  select(lat.0, lon.0) %>% 
+  select(lat.0, lon.0, year) %>% 
   distinct()
 
 dummy <- tibble(date = seq.Date(date("2012-01-01"), date("2017-12-31"), by = "day")) %>% 

@@ -7,7 +7,7 @@ setwd("weather")
 curl::curl_download('https://simplemaps.com/static/data/us-cities/uscitiesv1.4.csv', destfile = "data/0-raw/uscitiesv1.4.csv")
 curl::curl_download('ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.txt', destfile = "data/0-raw/isd-history.txt")
 
-for (year in 2012:2017) {
+for (year in 2007:2018) {
   file <- paste0('gsod_',year)
   ftp <- paste0('ftp://ftp.ncdc.noaa.gov/pub/data/gsod/',year,'/',file,'.tar')
   destfile <- paste0('data/0-raw/gsod/',file,'.op.gz')

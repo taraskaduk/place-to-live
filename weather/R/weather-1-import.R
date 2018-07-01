@@ -37,7 +37,7 @@ stations_us <- stations %>%
 
 weather_data_raw <- NULL
 
-for (year in 2012:2017) {
+for (year in 2012) {
   
   destfile <- paste0('data/0-raw/gsod/gsod_',year,'.op.gz')
   path_untar <- 'data/0-raw/gsod/untar'

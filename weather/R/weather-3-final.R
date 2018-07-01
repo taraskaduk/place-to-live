@@ -50,7 +50,7 @@ w_pleasant <- w_filled %>%
                               precip > 0.3 |
                               snow > 0, 
                             1, 0),
-         unpleasant = case_when(pleasant == 1 ~ "pleasant",
+         distinct_class = case_when(pleasant == 1 ~ "pleasant",
                                 hot == 1      ~ "hot",
                                 elements == 1 ~ "elements",
                                 cold == 1     ~ "cold",
@@ -60,13 +60,35 @@ msa_pleasant <- loc_msa %>%
   left_join(w_pleasant, by = c("lat.0", "lon.0"))
 
 
-msa_pleasant %>% 
-  filter(name == "Jacksonville, FL") %>% 
-ggplot(aes(x=date, alpha = as.factor(pleasant))) +
-  geom_point(aes(y = temp_mean), col = "grey")+
-  geom_point(aes(y = temp_max), col = "red") +
-  geom_point(aes(y = temp_min), col = "blue") +
-  facet_wrap(~ year, scales = "free")
+
+
+loc_top1000 %>% 
+  arrange(desc(as.integer(population))) %>% 
+  head(25) %>% 
+  left_join(w_pleasant, by = c("lat.0", "lon.0")) %>% 
+  
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = distinct_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~city) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#b3cde3"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+  
+  
+  
+# msa_pleasant %>% 
+#   filter(name == "Jacksonville, FL") %>% 
+# ggplot(aes(x=date, alpha = as.factor(pleasant))) +
+#   geom_point(aes(y = temp_mean), col = "grey")+
+#   geom_point(aes(y = temp_max), col = "red") +
+#   geom_point(aes(y = temp_min), col = "blue") +
+#   facet_wrap(~ year, scales = "free")
 
 
 msa_pleasant %>% 
@@ -75,14 +97,57 @@ msa_pleasant %>%
                      "Jacksonville, FL",
                      "San Diego-Carlsbad, CA",
                      "New York-Newark-Jersey City, NY-NJ-PA",
-                     "Los Angeles-Long Beach-Anaheim, CA")) %>% 
-  ggplot(aes(x=day, y = as.factor(month), fill = unpleasant), col = grey) +
-  geom_tile() +
+                     "Los Angeles-Long Beach-Anaheim, CA",
+                     "Chicago-Naperville-Elgin, IL-IN-WI",
+                     "San Francisco-Oakland-Hayward, CA",
+                     "Washington-Arlington-Alexandria, DC-VA-MD-WV",
+                     "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD")) %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = distinct_class)) +
+  geom_tile(col = "black") +
   facet_wrap(~name) +
-  theme_bw() + 
-  scale_fill_brewer(type = "div")+
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#b3cde3"), 
+                    name = "Distinct classification")+
   theme(panel.grid.major = element_blank()) +
   coord_equal()
+
+msa_summary <- msa_pleasant %>% 
+  group_by(name, year) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+  ungroup() %>% 
+  group_by(name) %>% 
+  summarise(pleasant = mean(pleasant)) %>% 
+  mutate(rank = row_number(desc(pleasant)))
+
+msa_top25 <- msa_summary %>% 
+  filter(rank <= 25) %>% 
+  mutate(name2 = reorder(name, rank))
+
+msa_pleasant %>% 
+  inner_join(msa_top25, by = "name") %>% 
+  filter(year == 2017) %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = distinct_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~name2) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#b3cde3"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+
+msa_pleasant %>% 
+  filter(year == 2017  & name == "Yuma, AZ") %>% View()
+
+
 
 
 msa_pleasant %>% 
