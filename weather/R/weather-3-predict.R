@@ -73,14 +73,10 @@ data_train_prep <- bake(mod_rec_trained,newdata = data_train)
 data_test_prep <- bake(mod_rec_trained,newdata = data_test)
 data_pred_prep <- bake(mod_rec_trained,newdata = data_missing)
 
-f_knn <- function(col){
 
-col <- quo(col)
-
-knn_train_mod <- knnreg(!!col ~ lat.0 + lon.0 + yday, 
+knn_train_mod <- knnreg(temp_mean ~ lat.0 + lon.0 + yday, 
                         data = data_train_prep,
                         k = 5)
-}
 
 
-f_knn(temp_mean)
+  predict(knn_train_mod, newdata = data_test_prep %>% head(100))
