@@ -9,7 +9,7 @@ setwd("weather")
 
 # Import ------------------------------------------------------------------
 
-load("data/2-tidy.RData")
+load("data/3-predict.RData")
 load("data/1-locations.RData")
 
 # Transform --------------------------------------------------------------------
@@ -21,21 +21,21 @@ load("data/1-locations.RData")
 
 
 p_temp_max <- 85
-p_temp_min <- 45 #lowest for only one extra layer of clothing
-p_temp_mean_low <- 55
+p_temp_min <- 40 #lowest for only one extra layer of clothing
+p_temp_mean_low <- 50
 p_temp_mean_high <- 75
-p_precip <- 0.3
+p_precip <- 0.1
 
 
 w_pleasant <- w_filled %>% 
   mutate(pleasant = if_else(temp_min >= p_temp_min &
                               temp_max <= p_temp_max &
                               temp_mean >= p_temp_mean_low & temp_mean <= p_temp_mean_high & 
-                              precip < p_precip &
-                              is_rain == 0 &
-                              is_tornado == 0 &
+                              precip <= p_precip &
+                              is_rain < 0.5 &
+                              is_tornado < 0.5 &
                               #is_snow == 0 &
-                              is_hail == 0,
+                              is_hail < 0.5,
                             1,
                             0),
          hot = if_else(temp_max > p_temp_max |
@@ -46,7 +46,7 @@ w_pleasant <- w_filled %>%
                           temp_mean < p_temp_mean_low,
                         1,
                         0),
-         elements = if_else(is_rain == 1 | is_snow == 1 | is_hail == 1 |
+         elements = if_else(is_rain >= .5 | is_snow >= .5 | is_hail >= .5 |
                               precip > 0.3 |
                               snow > 0, 
                             1, 0),
@@ -144,8 +144,6 @@ msa_pleasant %>%
   coord_equal()
 
 
-msa_pleasant %>% 
-  filter(year == 2017  & name == "Yuma, AZ") %>% View()
 
 
 

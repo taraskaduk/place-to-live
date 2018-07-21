@@ -145,20 +145,24 @@ f_knn <- function(df_train = data_leave, df_pred = data_missing, col){
 }
 
 
-test <- f_knn(data_leave, data_missing %>% head(100), col = "temp_mean")
-
-
-test <- data_missing %>% head(100) %>% 
+data_predicted <- data_missing %>% 
   mutate(temp_mean = f_knn(df_pred = ., col = "temp_mean"),
          temp_min =  f_knn(df_pred = ., col = "temp_min"),
          temp_max =  f_knn(df_pred = ., col = "temp_max"),
          precip =    f_knn(df_pred = ., col = "precip"),
          snow =      f_knn(df_pred = ., col = "snow"))
   
-  
 
+data_predicted2 <- data_all %>% 
+  filter(flag == "missing") %>% 
+  select(-c(temp_mean:is_tornado)) %>% 
+  left_join(data_predicted, by = c("lat.0", "lon.0", "yday", "year"))
+  
+w_filled <- data_all %>% 
+  anti_join(data_predicted2, by = c("lat.0", "lon.0", "yday", "year")) %>% 
+  union_all(data_predicted2)
 
 ## -------------
 
-
+save(w_filled, file = "data/3-predict.RData")
 
