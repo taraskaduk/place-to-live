@@ -45,7 +45,12 @@ load("data/2-tidy.RData")
 
 set.seed(4595)
 
-data_select <- data_all %>% select(lat.0, lon.0, flag, yday, year, temp_mean, temp_max, temp_min, precip, snow)
+r <- 365 / (2 * pi) #if 1 year is 365 days, it is a line that is 365 units long. Now make it a circle. That's circumference. Now calc the radius
+
+data_select <- data_all %>% 
+  mutate(day.x = cos((yday - 1)/365*360)*r,
+         day.y = sin((yday - 1)/365*360)*r) %>% 
+  select(lat.0, lon.0, day.x, day.y, year, flag, temp_mean, temp_max, temp_min, precip, snow)
 
 data_missing <- data_select %>% filter(flag == "missing") %>% select(-flag)
 data_exist <- data_select %>% filter(flag == "existing") %>% select(-flag)
@@ -55,52 +60,72 @@ data_exist <- data_select %>% filter(flag == "existing") %>% select(-flag)
 # data_test  <- testing(data_split)
 # nrow(data_train)/nrow(data_exist)
 # 
-# data_sample <- data_select %>% 
-#   select(-flag) %>% 
-#   arrange(lat.0, lon.0, yday) %>% 
+# data_sample <- data_select %>%
+#   select(-flag) %>%
+#   arrange(lat.0, lon.0, yday) %>%
 #   head(15000)
-
-
-
-
-
-# LM… This is shiiiit!!! --------------------------------------------------
-
-# mod_lm <- lm(temp_mean ~ lat.0 + lon.0 + yday, data = data_train)
 # 
-# pred_data <- data_test %>% 
+# 
+# 
+# 
+# 
+# # LM… This is shiiiit!!! --------------------------------------------------
+# 
+# mod_lm <- lm(temp_mean ~ lat.0 + lon.0 + day.x + day.y, data = data_train)
+# 
+# pred_data <- data_test %>%
 #   mutate(pred = predict(mod_lm, newdata = .))
 # 
 # summary(mod_lm)
 
 
-# Find nearest neighbors before doing knn??? ------------------------------
 
-data_knn_miss <- data_missing %>% 
-  select(lat.0, lon.0, yday, year)
 
-data_knn_exist <- data_exist %>%
-  select(lat.0, lon.0, yday, year)
 
-nn <- nn2(data = data_knn_exist,
-          query = data_knn_miss,
+# Preprocessing -----------------------------------------------------------
+
+data_train <- data_select %>% 
+  filter(!is.na(temp_max)) %>% 
+  select(lat.0:year, temp_max)
+
+data_pred <- data_select %>% 
+  filter(is.na(temp_max) & !is.na(temp_mean)) %>% 
+  select(lat.0:year, temp_max)
+
+knn_data <- data_select %>% 
+  mutate(prep_predict = if_else(is.na(temp_max) & !is.na(temp_mean), 1, 0),
+         prep_train = if_else(!is.na(temp_max), 1, 0))
+
+nn <- nn2(data = knn_data %>% filter(prep_predict == 1) %>% select(lat.0:year),
+          query = knn_data %>% filter(prep_train == 1) %>% select(lat.0:year),
           k = 10)
-
-# nn[[1]]
-# 
-# data_knn_miss[1,]
-# data_knn_exist[14028,]
-# data_knn_exist[14586,]
-# data_knn_exist[14029,]
-# data_knn_exist[15315,]
-# data_knn_exist[16410,]
-# 
-# class(nn[[1]])
-
 
 index_leave <- nn[[1]] %>% as.vector() %>% unique()
 
-data_leave <- data_exist[index_leave, ]
+knndata$flag <- knn_datachrome[index_leave, ] 
+
+  
+#formula <- as.formula(substitute(col ~ lat.0 + lon.0 + day.x + day.y + year, list(col = as.name(col))))
+formula <- as.formula(temp_max ~ lat.0 + lon.0 + day.x + day.y + year)
+
+
+knn_train_mod <- knnreg(formula = formula, 
+                        data = data_train,
+                        k = 5)
+
+#col <- quo_name(enquo(col))
+
+
+predict(knn_train_mod, newdata = data_pred)
+
+# pred_data <- df_pred %>% 
+#   head(100) %>% 
+#   mutate(!!col := predict(knn_train_mod, newdata = .))
+
+
+
+data_predicted <- data_pred %>% 
+  mutate(temp_max = predict(knn_train_mod, newdata = .))
 
 
 
@@ -127,7 +152,7 @@ data_leave <- data_exist[index_leave, ]
 
 f_knn <- function(df_train = data_leave, df_pred = data_missing, col){
   
-  formula <- as.formula(substitute(col ~ lat.0 + lon.0 + yday + year, list(col = as.name(col))))
+  formula <- as.formula(substitute(col ~ lat.0 + lon.0 + day.x + day.y + year, list(col = as.name(col))))
   
   knn_train_mod <- knnreg(formula = formula, 
                           data = df_train,
