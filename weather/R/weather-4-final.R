@@ -27,15 +27,14 @@ p_temp_mean_high <- 75
 p_precip <- 0.1
 
 
-w_pleasant <- w_filled %>% 
+w_pleasant <- data_predicted %>% 
+  mutate(day = day(date),
+         month = month(date)) %>% 
   mutate(pleasant = if_else(temp_min >= p_temp_min &
                               temp_max <= p_temp_max &
                               temp_mean >= p_temp_mean_low & temp_mean <= p_temp_mean_high & 
                               precip <= p_precip &
-                              is_rain < 0.5 &
-                              is_tornado < 0.5 &
-                              #is_snow == 0 &
-                              is_hail < 0.5,
+                              is_element < 0.5,
                             1,
                             0),
          hot = if_else(temp_max > p_temp_max |
@@ -46,7 +45,7 @@ w_pleasant <- w_filled %>%
                           temp_mean < p_temp_mean_low,
                         1,
                         0),
-         elements = if_else(is_rain >= .5 | is_snow >= .5 | is_hail >= .5 |
+         elements = if_else(is_element >= .5 |
                               precip > 0.3 |
                               snow > 0, 
                             1, 0),
@@ -150,11 +149,12 @@ msa_pleasant %>%
 
 msa_pleasant %>% 
   filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
-  ggplot(aes(x=day, y = year, fill = elements), col = grey) +
+  ggplot(aes(x=day, y = year, fill = as.factor(elements)), col = grey) +
   geom_tile() +
   facet_wrap( ~ month) +
   theme_bw() + 
   theme(panel.grid.major = element_blank()) +
+  scale_fill_fivethirtyeight()+
   coord_equal()
 
 msa_pleasant %>% 
@@ -165,6 +165,15 @@ msa_pleasant %>%
   theme_bw() + 
   theme(panel.grid.major = element_blank()) +
   coord_equal()
+
+msa_pleasant %>% 
+  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
+  group_by(year, month) %>% 
+  summarize(precip = sum(precip)) %>% 
+  ggplot(aes(x=month, y = precip, col = as.factor(year), group = year, alpha = year, size = year)) +
+  geom_line() +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank())
 
 
 
