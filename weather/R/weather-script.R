@@ -1,6 +1,7 @@
 library(maps)
 library(tidyverse)
 library(lubridate)
+library(caret)
 
 setwd("weather")
 
@@ -254,18 +255,48 @@ data_nn <- data_coords %>%
   semi_join(stations_nn, by = c("stn", "wban"))
 
 
-loc_msa_nn <- loc_msa %>% 
-  cbind(as_data_frame(nn[[1]])) %>% 
-  gather(nn, index, (V1:V5))
 
 
 
 
+knn_dummy <- loc_msa %>% 
+  select(geoid, name, lat, lon) %>% 
+  distinct() %>% 
+  merge(tibble(date = seq.Date(date("2012-01-01"), date("2017-12-31"), by = "day")), all = TRUE) %>% 
+  mutate(year = year(date),
+         yday = yday(date))
+
+
+knn_train <- data_nn %>% 
+  select(lat, lon, date:snow, is_rain, is_snow) %>% 
+  mutate(year = year(date),
+         yday = yday(date))
 
 
 
+f_knn <- function(df_train = knn_train, 
+                  df_pred = knn_dummy, col){
+  
+  formula <- as.formula(substitute(col ~ lat + lon + yday + year, list(col = as.name(col))))
+  knn_model <- knnreg(formula = formula, 
+                      data = df_train,
+                      k = 5)
+  col <- quo_name(enquo(col))
+  predict(knn_model, newdata = df_pred)
+}
 
 
+
+## This is where it will probably choke...
+
+knn_predicted <- knn_dummy %>% head(100) %>% 
+  mutate(temp_mean = f_knn(df_pred = ., col = "temp_mean"),
+         temp_min =  f_knn(df_pred = ., col = "temp_min"),
+         temp_max =  f_knn(df_pred = ., col = "temp_max"),
+         precip =    f_knn(df_pred = ., col = "precip"),
+         snow =      f_knn(df_pred = ., col = "snow"),
+         is_rain =   f_knn(df_pred = ., col = "is_rain"),
+         is_snow =   f_knn(df_pred = ., col = "is_snow"))
 
 
 
