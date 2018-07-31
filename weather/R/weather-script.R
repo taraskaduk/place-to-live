@@ -286,6 +286,7 @@ f_knn <- function(df_train = knn_train,
 }
 
 
+save(knn_dummy, knn_train, f_knn, loc_msa, file = "data/zz-test.RData")
 
 ## This is where it will probably choke...
 
