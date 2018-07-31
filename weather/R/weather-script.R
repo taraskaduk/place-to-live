@@ -1,24 +1,778 @@
+library(maps)
 library(tidyverse)
+library(lubridate)
 
 setwd("weather")
 
-# Download raw files ------------------------------------------------------
 
-curl::curl_download('https://simplemaps.com/static/data/us-cities/uscitiesv1.4.csv', destfile = "data/0-raw/uscitiesv1.4.csv")
-curl::curl_download('ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.txt', destfile = "data/0-raw/isd-history.txt")
+# 1. Import ---------------------------------------------------------------
+
+
+## Stations
+
+# path_stations <- "ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.txt"
+path_stations <- "data/0-raw/isd-history.txt"
+
+stations_import <- read_table(path_stations,
+                              col_types = cols(BEGIN = col_date(format = "%Y%m%d"), 
+                                               CALL = col_character(), 
+                                               CTRY = col_character(), 
+                                               `ELEV(M)` = col_double(), 
+                                               END = col_date(format = "%Y%m%d"), 
+                                               LAT = col_double(), 
+                                               LON = col_double(), 
+                                               ST = col_character(), 
+                                               `STATION NAME` = col_character(), 
+                                               USAF = col_character(), 
+                                               WBAN = col_character()),
+                              skip = 20,
+                              na = c('-999.0', ''))
+
+colnames(stations_import) <- tolower(colnames(stations_import))
+
+stations <- stations_import %>% 
+  rename(station = `station name`,
+         elev = `elev(m)`) %>% 
+  filter(!is.na(usaf) & !(is.na(lat) | is.na(lon)))
+  
+
+stations_us <- stations %>% 
+  #USA doesn't include AK, HI, PR. We start at the world level
+  mutate(country = map.where('world', lon, lat)) %>% 
+  filter(
+    # by filtering out everything not USA, we're losing some precision for towns on the border,
+    # but the US data alone is rich enough.
+    (str_detect(country, "USA") == TRUE |  str_detect(country, "Puerto Rico") == TRUE) & lon < 0 &
+    # remove old stations
+    year(end) >= year(today()) & year(begin) <= 2012
+    )
+  
+
+ggplot(stations_us, aes(x=lon, y = lat)) + 
+  geom_point(size = 0.5, alpha = 0.4) +
+  theme_bw()
+
+## Data
+
+weather_data_raw <- NULL
 
 for (year in 2012:2017) {
-  file <- paste0('gsod_',year)
-  ftp <- paste0('ftp://ftp.ncdc.noaa.gov/pub/data/gsod/',year,'/',file,'.tar')
-  destfile <- paste0('data/0-raw/gsod/',file,'.op.gz')
-  curl::curl_download(ftp, destfile)
+  
+  destfile <- paste0('data/0-raw/gsod/gsod_',year,'.op.gz')
+  path_untar <- 'data/0-raw/gsod/untar'
+  untar(destfile, exdir = path_untar)
+  
+  
+  files_all <- list.files(path = path_untar)
+  files_stations <- paste0(stations_us$usaf, "-", stations_us$wban, "-", year, ".op.gz")
+  files_keep <- subset(files_all, files_all %in% files_stations)
+  
+  
+  data_raw <- map_df(paste0(path_untar, "/",files_keep),
+                     read_table,
+                     col_types = cols(.default = "c",
+                                      YEARMODA = col_date(format = "%Y%m%d")),
+                     na = c("9999.9", '99.99', '999.9')
+  )
+  
+  colnames(data_raw) <- tolower(colnames(data_raw))
+  
+  data_raw_renamed <- data_raw %>%
+    rename(stn = `stn---`, date = yearmoda, temp_mean = temp, temp_min = min, temp_max = max)
+  
+  weather_data_raw <- rbind(weather_data_raw, data_raw_renamed)
+  #file.remove(destfile)
+  #unlink(file, recursive = TRUE)
+  
 }
 
-curl::curl_download('https://gist.githubusercontent.com/Miserlou/c5cd8364bf9b2420bb29/raw/2bf258763cdddd704f8ffd3ea9a3e81d25e2c6f6/cities.json', 
-                    destfile = "data/0-raw/cities.json")
+data_weather <- weather_data_raw %>%
+  select(stn, wban, date, temp_mean, temp_min, temp_max, precip = prcp, snow = sndp, pressure = stp, wind = wdsp, gust, frshtt) %>%
+  mutate(prcp_hours = case_when(str_detect(precip, "A") ~ 6,
+                                str_detect(precip, "B") ~ 12,
+                                str_detect(precip, "C") ~ 18,
+                                str_detect(precip, "D") ~ 24,
+                                str_detect(precip, "E") ~ 12,
+                                str_detect(precip, "F") ~ 24,
+                                str_detect(precip, "G") ~ 24,
+                                str_detect(precip, "H") ~ 1,
+                                str_detect(precip, "I") ~ 1,
+                                TRUE ~ NA_real_)) %>% 
+  map_df(~ str_replace_all(.,'A|B|C|D|E|F|G|H|I|\\*', '')) %>%
+  map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', 'prcp_hours', 'gust', 'wind', 'pressure'), as.numeric, na.rm = TRUE) %>%
+  dplyr::bind_rows() %>% 
+  # precipitation and snowfall NAs can be converted to 0 for this project
+  # (see data description for details)
+  # except for the one notated with an I
+  replace_na(replace = list(precip = 0, snow = 0)) %>% 
+  mutate(precip = precip / prcp_hours) %>% 
+  mutate(is_fog     = as.integer(substr(frshtt, 1,1)),
+         is_rain    = as.integer(substr(frshtt, 2,2)),
+         is_snow    = as.integer(substr(frshtt, 3,3)),
+         is_hail    = as.integer(substr(frshtt, 4,4)),
+         is_thunder = as.integer(substr(frshtt, 5,5)),
+         is_tornado = as.integer(substr(frshtt, 6,6))) %>% 
+  select(-frshtt, -prcp_hours)
 
 
-curl::curl_download('http://www2.census.gov/geo/docs/maps-data/data/gazetteer/2015_Gazetteer/2015_Gaz_cbsa_national.zip', destfile = "data/0-raw/2015_Gaz_cbsa_national.zip")
+## Checkpoint
+save(data_weather, stations_us, file = "data/1-import.RData")
 
-# Can't programatically download this one...
-# https://factfinder.census.gov/faces/tableservices/jsf/pages/productview.xhtml?pid=PEP_2017_PEPANNRES&prodType=table
+
+
+# 1. Locations ------------------------------------------------------------
+
+library(jsonlite)
+# library(tidyverse)
+# setwd("weather")
+
+path_raw <- "data/0-raw/"
+path_top1000 <- paste0(path_raw, "cities.json")
+loc_top1000 <- fromJSON(path_top1000) %>% 
+  rename(lon = longitude,
+         lat = latitude,
+         growth = growth_from_2000_to_2013) %>% 
+  mutate(lat0 = round(lat,0),
+         lon0 = round(lon,0),
+         lat05 = round(2*lat,0)/2,
+         lon05 = round(2*lon,0)/2)
+
+
+path_cities <- paste0(path_raw, "uscitiesv1.4.csv")
+loc_cities <- read_csv(path_cities) %>% 
+  rename(lon = lng,
+         city_nonascii = city,
+         city = city_ascii,
+         state = state_id) %>% 
+  mutate(lat0 = round(lat,0),
+         lon0 = round(lon,0),
+         lat05 = round(2*lat,0)/2,
+         lon05 = round(2*lon,0)/2)
+
+
+
+path_msa <- paste0(path_raw,"2015_Gaz_cbsa_national.txt")
+loc_msa <- read_delim(path_msa, 
+                      "\t", escape_double = FALSE, 
+                      locale = locale(encoding = "LATIN1", 
+                                      asciify = TRUE),
+                      col_types = cols(ALAND = col_skip(), 
+                                       ALAND_SQMI = col_skip(), 
+                                       AWATER = col_skip(), 
+                                       AWATER_SQMI = col_skip(),
+                                       GEOID = col_character()), 
+                      trim_ws = TRUE) %>% 
+  rename(csafp = CSAFP,
+         geoid = GEOID,
+         name = NAME,
+         lat = INTPTLAT,
+         lon = INTPTLONG,
+         type = CBSA_TYPE) %>% 
+  select(-type) %>% 
+  separate(name, c("name", "type"), sep = -10) %>% 
+  mutate(name = trimws(name)) 
+
+
+path_msa_pop <- paste0(path_raw,"PEP_2017_PEPANNRES.csv")
+loc_msa_pop <- read_csv(path_msa_pop, 
+                        col_types = cols(GEO.id2 = col_character()),
+                        locale = locale(encoding = "LATIN1", 
+                                        asciify = TRUE),
+                        trim_ws = TRUE) %>% 
+  select(geoid = GEO.id2,
+         pop10 = rescen42010,
+         pop17 = respop72017)
+
+loc_msa <- left_join(loc_msa, loc_msa_pop, by = "geoid") %>% 
+  mutate(lat0 = round(lat,0),
+         lon0 = round(lon,0),
+         lat05 = round(2*lat,0)/2,
+         lon05 = round(2*lon,0)/2)
+
+
+
+ggplot() + 
+  theme_void() +
+  scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(25, 50)) +
+  coord_equal()+
+  geom_point(data = loc_msa, aes(x=lon, y = lat, col = type),alpha = 0.3, size = 1)
+
+ggplot() + 
+  theme_void() +
+  scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(25, 50)) +
+  coord_equal()+
+  geom_point(data = loc_msa, aes(x=lon0, y = lat0), col = 'blue',alpha = 0.3)
+
+ggplot() + 
+  theme_void() +
+  scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(25, 50)) +
+  coord_equal()+
+  geom_point(data = loc_msa, aes(x=lon05, y = lat05), col = 'blue',alpha = 0.3)
+
+## Checkpoint
+save(loc_cities, loc_msa, loc_top1000, file = "data/1-locations.RData")
+
+
+# 2. Tidy -----------------------------------------------------------------
+
+
+stations_join <- stations_us %>% 
+  select(usaf, wban, lat, lon)
+
+data_coords <- data_weather %>% 
+  inner_join(stations_join, by = c('stn' = 'usaf', 'wban'))
+
+#This creates a list of stations with consistent observations over time
+stations_stable <- data_coords %>% 
+  group_by(stn, wban, lat, lon, year(date)) %>% 
+  count() %>% 
+  group_by(stn, wban, lat, lon) %>% 
+  summarise(min = min(n)) %>% 
+  filter(min > 365*0.9) %>% 
+  ungroup()
+
+
+
+library(RANN)
+
+
+nn <- nn2(data = stations_stable %>% select(lat,lon),
+          query = loc_msa %>% select(lat,lon),
+          k = 5)
+index_leave <- nn[[1]] %>% as.vector() %>% unique()
+
+## This one create a column rather than filters out. Uncomment - Imma filter out this time
+#data_stable$nn <- rownames(data_stable) %in% index_leave
+
+stations_nn <- stations_stable[index_leave, ]
+
+
+data_nn <- data_coords %>% 
+  semi_join(stations_nn, by = c("stn", "wban"))
+
+
+loc_msa_nn <- loc_msa %>% 
+  cbind(as_data_frame(nn[[1]])) %>% 
+  gather(nn, index, (V1:V5))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 3. Predict --------------------------------------------------------------
+
+library(maps)
+library(ggthemes)
+library(scales)
+library(rsample)
+library(caret)
+library(recipes)
+library(yardstick)
+
+
+# library(tidyverse)
+# library(lubridate)
+
+
+
+data_all <- data_all %>% 
+  mutate(is_element = if_else(is_rain + is_snow + is_hail > 0, 1, 0))
+
+data_select <- data_all %>% 
+  select(lat.0, lon.0, yday, year, date, flag, temp_mean, temp_max, temp_min, precip, snow, is_element)
+
+
+data_prep <- data_select %>% 
+  mutate(flag = if_else((is.na(temp_max) | is.na(temp_min) | is.na(precip)) & !is.na(temp_mean), "partial", flag))
+
+
+nn <- nn2(data = data_prep %>% filter(flag == "existing") %>% select(lat.0:year),
+          query = data_prep %>% filter(flag == "partial") %>% select(lat.0:year),
+          k = 5)
+index_leave <- nn[[1]] %>% as.vector() %>% unique()
+data_prep$flag_train_prep <- rownames(data_prep) %in% index_leave
+
+
+
+
+
+f_knn <- function(df_train = data_prep %>% filter(flag_train_prep == TRUE), 
+                  df_pred = data_prep, col){
+  
+  formula <- as.formula(substitute(col ~ lat.0 + lon.0 + yday + year, list(col = as.name(col))))
+  
+  knn_model <- knnreg(formula = formula, 
+                      data = df_train,
+                      k = 5)
+  col <- quo_name(enquo(col))
+  
+  
+  predict(knn_model, newdata = df_pred)
+  
+}
+
+
+data_prepped <- data_prep %>%
+  filter(flag == 'partial') %>% 
+  mutate(temp_min =  f_knn(df_pred = ., col = "temp_min"),
+         temp_max =  f_knn(df_pred = ., col = "temp_max"),
+         precip =    f_knn(df_pred = ., col = "precip")) %>% 
+  union_all(data_prep %>% filter(flag != "partial"))
+
+
+
+# Final prediction
+
+nn <- nn2(data = data_prepped %>% filter(flag != "missing") %>% select(lat.0:year),
+          query = data_prepped %>% filter(flag == "missing") %>% select(lat.0:year),
+          k = 5)
+
+index_leave <- nn[[1]] %>% as.vector() %>% unique()
+
+data_prepped$flag_train <- rownames(data_prepped) %in% index_leave
+
+
+
+data_predicted <- data_prepped %>% 
+  filter(flag == 'missing') %>% 
+  mutate(temp_mean = f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "temp_mean"),
+         temp_min =  f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "temp_min"),
+         temp_max =  f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "temp_max"),
+         precip =    f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "precip"),
+         snow =      f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "snow"),
+         is_element= f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "is_element")) %>% 
+  union_all(data_prep %>% filter(flag != "missing"))
+
+
+
+## Checkpoint
+save(data_predicted, file = "data/3-predict.RData")
+
+
+# 4. Final ----------------------------------------------------------------
+
+library(maps)
+library(ggthemes)
+library(scales)
+
+# library(tidyverse)
+# library(lubridate)
+# setwd("weather")
+# load("data/3-predict.RData")
+# load("data/1-locations.RData")
+
+
+
+## Notes
+# https://www.coynecollege.edu/news-events/ideal-temperatures-heat-cool
+# https://weather.com/news/news/how-hot-is-too-hot-survey
+# https://en.wikipedia.org/wiki/Rain#Intensity
+
+
+p_temp_max <- 85
+p_temp_min <- 40 #lowest for only one extra layer of clothing
+p_temp_mean_low <- 50
+p_temp_mean_high <- 75
+p_precip <- 0.1
+
+
+w_pleasant <- data_predicted %>% 
+  mutate(day = day(date),
+         month = month(date)) %>% 
+  mutate(pleasant = if_else(temp_min >= p_temp_min &
+                              temp_max <= p_temp_max &
+                              temp_mean >= p_temp_mean_low & temp_mean <= p_temp_mean_high & 
+                              precip <= p_precip &
+                              is_element < 0.5,
+                            1,
+                            0),
+         hot = if_else(temp_max > p_temp_max |
+                         temp_mean > p_temp_mean_high,
+                       1,
+                       0),
+         cold = if_else(temp_min < p_temp_min |
+                          temp_mean < p_temp_mean_low,
+                        1,
+                        0),
+         elements = if_else(is_element >= .5 |
+                              precip > 0.3 |
+                              snow > 0, 
+                            1, 0),
+         distinct_class = case_when(pleasant == 1 ~ "pleasant",
+                                    hot == 1      ~ "hot",
+                                    elements == 1 ~ "elements",
+                                    cold == 1     ~ "cold",
+                                    TRUE          ~ NA_character_))
+
+msa_pleasant <- loc_msa %>% 
+  left_join(w_pleasant, by = c("lat.0", "lon.0"))
+
+
+
+
+loc_top1000 %>% 
+  arrange(desc(as.integer(population))) %>% 
+  head(25) %>% 
+  left_join(w_pleasant, by = c("lat.0", "lon.0")) %>% 
+  
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = distinct_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~city) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#b3cde3"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+
+
+# msa_pleasant %>% 
+#   filter(name == "Jacksonville, FL") %>% 
+# ggplot(aes(x=date, alpha = as.factor(pleasant))) +
+#   geom_point(aes(y = temp_mean), col = "grey")+
+#   geom_point(aes(y = temp_max), col = "red") +
+#   geom_point(aes(y = temp_min), col = "blue") +
+#   facet_wrap(~ year, scales = "free")
+
+
+msa_pleasant %>% 
+  filter(year == 2017 &
+           name %in% c("Seattle-Tacoma-Bellevue, WA", 
+                       "Jacksonville, FL",
+                       "San Diego-Carlsbad, CA",
+                       "New York-Newark-Jersey City, NY-NJ-PA",
+                       "Los Angeles-Long Beach-Anaheim, CA",
+                       "Chicago-Naperville-Elgin, IL-IN-WI",
+                       "San Francisco-Oakland-Hayward, CA",
+                       "Washington-Arlington-Alexandria, DC-VA-MD-WV",
+                       "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD")) %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = distinct_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~name) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#b3cde3"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+msa_summary <- msa_pleasant %>% 
+  group_by(name, year) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+  ungroup() %>% 
+  group_by(name) %>% 
+  summarise(pleasant = mean(pleasant)) %>% 
+  mutate(rank = row_number(desc(pleasant)))
+
+msa_top25 <- msa_summary %>% 
+  filter(rank <= 25) %>% 
+  mutate(name2 = reorder(name, rank))
+
+msa_pleasant %>% 
+  inner_join(msa_top25, by = "name") %>% 
+  filter(year == 2017) %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = distinct_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~name2) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#b3cde3"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+
+
+
+
+
+msa_pleasant %>% 
+  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
+  ggplot(aes(x=day, y = year, fill = as.factor(elements)), col = grey) +
+  geom_tile() +
+  facet_wrap( ~ month) +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank()) +
+  scale_fill_fivethirtyeight()+
+  coord_equal()
+
+msa_pleasant %>% 
+  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
+  ggplot(aes(x=day, y = year, fill = precip), col = grey) +
+  geom_tile() +
+  facet_wrap( ~ month) +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+msa_pleasant %>% 
+  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
+  group_by(year, month) %>% 
+  summarize(precip = sum(precip)) %>% 
+  ggplot(aes(x=month, y = precip, col = as.factor(year), group = year, alpha = year, size = year)) +
+  geom_line() +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank())
+
+
+
+w_pleasant_summar <- w_pleasant %>% 
+  group_by(lat.0, lon.0, year) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+  ungroup() %>% 
+  group_by(lat.0, lon.0) %>% 
+  summarise(pleasant = mean(pleasant)) %>% 
+  mutate(pleasant_cat = case_when(pleasant >=300 ~ "Over 300",
+                                  pleasant >=200 ~ "200 - 299",
+                                  pleasant >=100 ~ "100 - 199",
+                                  pleasant >=50 ~ "50 - 99",
+                                  TRUE ~ "Less than 50"),
+         pleasant_cat = factor(pleasant_cat, levels = c("Less than 50", "50 - 99", "100 - 199", "200 - 299", "Over 300")))
+
+
+
+
+ggplot() + 
+  geom_point(data = w_pleasant_summar %>% filter(pleasant_cat == "Over 300"), aes(x=lon.0, y=lat.0), col = "red", size = 9, alpha = 0.4) +
+  geom_point(data = w_pleasant_summar %>% filter(pleasant_cat == "200 - 299"), aes(x=lon.0, y=lat.0), col = "red", size = 8, alpha = 0.3) +
+  geom_point(data = w_pleasant_summar, aes(x=lon.0, y=lat.0, col=pleasant_cat), size = 6) +
+  #  scale_color_brewer(type = "seq", name = "Pleasant days") +
+  scale_colour_manual(values = c("grey90", "#c6dbef", "#4292c6", "#2171b5", "#08306b"), name = "Pleasant days") +
+  theme_fivethirtyeight() +
+  theme(
+    axis.title=element_blank(),
+    axis.text=element_blank(),
+    axis.ticks=element_blank())+
+  labs(title = "Places with most pleasant days in a year",
+       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
+       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
+       taraskaduk.com | @taraskaduk")
+
+lat <- data_frame(lat.0 = seq(-90, 90, by = 1))
+lon <- data_frame(lon.0 = seq(-180, 180, by = 1))
+dots <- lat %>% 
+  merge(lon, all = TRUE)
+
+dots <- dots %>% 
+  mutate(country = map.where('state', lon.0, lat.0),
+         lakes = map.where('lakes', lon.0, lat.0)) %>% 
+  filter(!is.na(country) & is.na(lakes)) %>% 
+  select(-lakes)
+
+ggplot() + 
+  geom_point(data = dots, aes(x=lon.0, y = lat.0), col = "grey90", size = 6) +
+  geom_point(data = w_pleasant_summar, aes(x=lon.0, y=lat.0, col=pleasant), size = 6, alpha = 0.4) +
+  geom_point(data = w_pleasant_summar, aes(x=lon.0, y=lat.0, col=pleasant, alpha = pleasant), size = 6) + 
+  
+  scale_colour_gradient2(low = "grey85",
+                         high = "darkblue",
+                         
+                         na.value = "grey85") +
+  theme_fivethirtyeight() +
+  theme(legend.position="none",
+        axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank())+
+  labs(title = "Places with most pleasant days in a year",
+       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
+       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
+       taraskaduk.com | @taraskaduk")
+
+
+
+
+
+
+
+
+
+
+w_msa <- loc_msa %>% 
+  #filter(!(state %in% c("AK", "HI", "PR", "VI"))) %>% 
+  # select(id, city = city_ascii, state = state_id, lat.0, lon.0, lat, lon) %>% 
+  left_join(w_pleasant_summar, by = c("lat.0", "lon.0")) %>% 
+  mutate(pleasant_cat = case_when(pleasant >=200 ~ "Over 200",
+                                  pleasant >=150 ~ "150 - 199",
+                                  pleasant >=100 ~ "100 - 149",
+                                  TRUE ~ "Less than 100"),
+         pleasant_cat = factor(pleasant_cat, levels = c("Less than 100", "100 - 149", "150 - 199", "Over 200")))
+
+top_msa <- w_msa %>% 
+  group_by(lat.0, lon.0, pleasant) %>% 
+  summarise(loc = paste(name, collapse = ", "))
+
+top_cities$data
+
+
+ggplot() + 
+  geom_point(data = cities_w, aes(x=lon, y=lat, col=pleasant_cat), size = 0.1) +
+  scale_colour_manual(values = c("grey90", "#c6dbef", "#4292c6", "#084594"), name = "Pleasant days") +
+  theme_fivethirtyeight() +
+  theme(
+    axis.title=element_blank(),
+    axis.text=element_blank(),
+    axis.ticks=element_blank())+
+  labs(title = "Places with most pleasant days in a year",
+       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
+       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
+       taraskaduk.com | @taraskaduk")
+
+
+
+
+
+
+# Visualize ---------------------------------------------------------------
+
+# Generate a data frame with all dots -----------------------------------------------
+
+lat <- data_frame(lat.0 = seq(-90, 90, by = 1))
+lon <- data_frame(lon.0 = seq(-180, 180, by = 1))
+dots <- lat %>% 
+  merge(lon, all = TRUE)
+
+
+## Only include dots that are within borders. Also, exclude lakes.
+dots <- dots %>% 
+  mutate(country = map.where('state', lon.0, lat.0),
+         lakes = map.where('lakes', lon.0, lat.0)) %>% 
+  filter(!is.na(country) & is.na(lakes)) %>% 
+  select(-lakes)
+
+
+
+
+
+
+
+
+
+
+
+
+weather_summary <- w_daily_pleasant %>% 
+  group_by(lon.0, lat.0) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+  semi_join(dots, by = c("lat.0", "lon.0")) %>% 
+  mutate(pleasant200 = if_else(pleasant >= 200, 1, 0),
+         pleasant150 = if_else(pleasant >= 150, 1, 0),
+         pleasant_cat = case_when(pleasant >=200 ~ "Over 200",
+                                  pleasant >=150 ~ "150 - 199",
+                                  pleasant >=100 ~ "100 - 149",
+                                  TRUE ~ "Less than 100"),
+         pleasant_cat = factor(pleasant_cat, levels = c("Less than 100", "100 - 149", "150 - 199", "Over 200")))
+
+
+ggplot() + 
+  geom_point(data = dots, aes(x=lon.0, y = lat.0), col = "grey90", size = 6) +
+  geom_point(data = weather_summary, aes(x=lon.0, y=lat.0, col=pleasant), size = 6, alpha = 0.4) +
+  geom_point(data = weather_summary, aes(x=lon.0, y=lat.0, col=pleasant, alpha = pleasant), size = 6) + 
+  
+  scale_colour_gradient2(low = "grey90",
+                         high = "darkblue",
+                         
+                         na.value = "grey95") +
+  theme_fivethirtyeight() +
+  theme(legend.position="none",
+        axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank())+
+  labs(title = "Places with most pleasant days in a year",
+       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
+       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
+       taraskaduk.com | @taraskaduk")
+
+
+ggplot() + 
+  geom_point(data = dots, aes(x=lon.0, y = lat.0), col = "grey95", size = 6) +
+  geom_point(data = weather_summary, aes(x=lon.0, y=lat.0, col=pleasant_cat), size = 6) +
+  
+  scale_colour_manual(values = c("grey90", "#c6dbef", "#4292c6", "#084594"), name = "Pleasant days") +
+  
+  theme_fivethirtyeight() +
+  theme(
+    axis.title=element_blank(),
+    axis.text=element_blank(),
+    axis.ticks=element_blank())+
+  labs(title = "Places with most pleasant days in a year",
+       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
+       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
+       taraskaduk.com | @taraskaduk")
+
+
+
+
+w_daily_pleasant %>% 
+  filter(lat.0 == 48 & lon.0 == -122) %>% 
+  ggplot(aes(x=yday, y = temp_mean, col = as.factor(pleasant))) + 
+  geom_point()
+
+w_daily_pleasant %>% 
+  filter(lat.0 == 48 & lon.0 == -122) %>% 
+  ggplot(aes(x=yday, y = prcp, col = as.factor(pleasant))) + 
+  geom_point()
+
+
+w_daily_pleasant %>% 
+  filter(lat.0 == 30 & lon.0 == -81) %>% 
+  ggplot(aes(x=yday, y = temp_mean, col = as.factor(pleasant))) + 
+  geom_point()
+
+w_daily_pleasant %>% 
+  filter(lat.0 == 30 & lon.0 == -81) %>% 
+  ggplot(aes(x=yday, y = prcp, col = as.factor(pleasant))) + 
+  geom_point()
+
+w_daily_pleasant %>% 
+  group_by(lon.0, lat.0) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+  ggplot(aes(x=lon.0, y=lat.0, col=pleasant)) + 
+  geom_point(size = 3) + 
+  scale_color_continuous(low='white', high='red') +
+  theme_void()
+
+
+w_daily_pleasant %>% 
+  group_by(lon.0, lat.0) %>% 
+  summarise(pleasant = sum(pleasant)) %>% 
+  mutate(pleasant_group = as.factor(case_when(pleasant > 250 ~ 3,
+                                              pleasant > 150 ~ 2,
+                                              TRUE ~ 1))) %>% 
+  ggplot(aes(x=lon.0, y=lat.0, col=pleasant_group)) + 
+  geom_point(size = 4) + 
+  theme_void() +
+  coord_map(projection = "albers", lat_0=45, lon_0=-100)
+
+
+
+
+
+
+
