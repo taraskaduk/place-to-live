@@ -1,7 +1,12 @@
 library(maps)
-library(tidyverse)
-library(lubridate)
+library(jsonlite)
+library(RANN)
+library(ggthemes)
+library(scales)
 library(caret)
+library(lubridate)
+library(tidyverse)
+
 
 setwd("weather")
 
@@ -123,10 +128,6 @@ save(data_weather, stations_us, file = "data/1-import.RData")
 
 # 1. Locations ------------------------------------------------------------
 
-library(jsonlite)
-# library(tidyverse)
-# setwd("weather")
-
 path_raw <- "data/0-raw/"
 path_top1000 <- paste0(path_raw, "cities.json")
 loc_top1000 <- fromJSON(path_top1000) %>% 
@@ -219,6 +220,8 @@ save(loc_cities, loc_msa, loc_top1000, file = "data/1-locations.RData")
 
 # 2. Tidy -----------------------------------------------------------------
 
+load("data/1-locations.RData")
+load("data/1-import.RData")
 
 stations_join <- stations_us %>% 
   select(usaf, wban, lat, lon)
@@ -237,7 +240,7 @@ stations_stable <- data_coords %>%
 
 
 
-library(RANN)
+
 
 
 nn <- nn2(data = stations_stable %>% select(lat,lon),
@@ -248,23 +251,57 @@ index_leave <- nn[[1]] %>% as.vector() %>% unique()
 ## This one create a column rather than filters out. Uncomment - Imma filter out this time
 #data_stable$nn <- rownames(data_stable) %in% index_leave
 
-stations_nn <- stations_stable[index_leave, ]
+stations_nn <- stations_stable %>% 
+  mutate(index = rownames(.)) %>% 
+  .[index_leave, ]
 
 
 data_nn <- data_coords %>% 
-  semi_join(stations_nn, by = c("stn", "wban"))
+  inner_join(stations_nn %>% select(stn, wban, index), by = c("stn", "wban"))
+
+
+loc_nn <- loc_msa %>% 
+  cbind(as_data_frame(nn[[1]]))
 
 
 
-
-
-
-knn_dummy <- loc_msa %>% 
-  select(geoid, name, lat, lon) %>% 
+result_dummy <- loc_nn %>% 
+  select(geoid, name, lat, lon, V1:V5) %>% 
   distinct() %>% 
-  merge(tibble(date = seq.Date(date("2012-01-01"), date("2017-12-31"), by = "day")), all = TRUE) %>% 
+  merge(tibble(date = seq.Date(date("2012-01-01"), date("2017-12-31"), by = "day")), all = TRUE)
+
+result_gathered <- result_dummy %>% 
   mutate(year = year(date),
-         yday = yday(date))
+         yday = yday(date)) %>% 
+  gather(key = "neighbor", value = "index", c(V1:V5)) %>% 
+  mutate(index = as.character(index))
+
+data_tojoin <- data_nn %>% 
+  mutate(date = as.Date(date)) %>% 
+  select(index, date, temp_mean:snow, is_rain, is_snow)
+
+result_joined <- result_gathered %>% 
+  left_join(data_tojoin, by=c("index", "date"))
+
+
+
+result_summed <- result_joined %>% 
+  group_by(geoid, name, lat, lon, date, year, yday) %>% 
+  summarise(temp_mean = mean(temp_mean, na.rm = TRUE),
+            temp_min = mean(temp_min, na.rm = TRUE),
+            temp_max = mean(temp_max, na.rm = TRUE),
+            precip = max(precip, na.rm = TRUE),
+            snow = max(snow, na.rm = TRUE),
+            is_rain = max(is_rain, na.rm = TRUE),
+            is_snow = max(is_snow, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  purrr::map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', "is_rain", "is_snow"), ~ifelse(is.nan(.x) | is.infinite(.x), NA, .x)) %>% 
+  bind_rows() %>% 
+  mutate(is_na = if_else(rowSums(is.na(.)) > 0, 1, 0))
+
+
+
+
 
 
 knn_train <- data_nn %>% 
@@ -275,134 +312,52 @@ knn_train <- data_nn %>%
 
 
 f_knn <- function(df_train = knn_train, 
-                  df_pred = knn_dummy, col){
+                  df_pred, col){
+  
+  nn <- nn2(data = df_train %>% select(lat,lon,yday,year),
+            query = df_pred %>% select(lat,lon,yday,year),
+            k = 5)
+  i_nn <- nn[[1]] %>% as.vector() %>% unique()
+  
+  df_train_nn <- df_train[i_nn, ]
   
   formula <- as.formula(substitute(col ~ lat + lon + yday + year, list(col = as.name(col))))
   knn_model <- knnreg(formula = formula, 
-                      data = df_train,
+                      data = df_train_nn,
                       k = 5)
   col <- quo_name(enquo(col))
+
   predict(knn_model, newdata = df_pred)
-}
+
+  }
 
 
-save(knn_dummy, knn_train, f_knn, loc_msa, file = "data/zz-test.RData")
+
+
+
+#save(knn_dummy, knn_train, f_knn, loc_msa, file = "data/zz-test.RData")
 
 ## This is where it will probably choke...
 
-knn_predicted <- knn_dummy %>% head(100) %>% 
-  mutate(temp_mean = f_knn(df_pred = ., col = "temp_mean"),
-         temp_min =  f_knn(df_pred = ., col = "temp_min"),
-         temp_max =  f_knn(df_pred = ., col = "temp_max"),
-         precip =    f_knn(df_pred = ., col = "precip"),
-         snow =      f_knn(df_pred = ., col = "snow"),
-         is_rain =   f_knn(df_pred = ., col = "is_rain"),
-         is_snow =   f_knn(df_pred = ., col = "is_snow"))
-
-
-
-
-
-
-
-
-
-
-# 3. Predict --------------------------------------------------------------
-
-library(maps)
-library(ggthemes)
-library(scales)
-library(rsample)
-library(caret)
-library(recipes)
-library(yardstick)
-
-
-# library(tidyverse)
-# library(lubridate)
-
-
-
-data_all <- data_all %>% 
-  mutate(is_element = if_else(is_rain + is_snow + is_hail > 0, 1, 0))
-
-data_select <- data_all %>% 
-  select(lat.0, lon.0, yday, year, date, flag, temp_mean, temp_max, temp_min, precip, snow, is_element)
-
-
-data_prep <- data_select %>% 
-  mutate(flag = if_else((is.na(temp_max) | is.na(temp_min) | is.na(precip)) & !is.na(temp_mean), "partial", flag))
-
-
-nn <- nn2(data = data_prep %>% filter(flag == "existing") %>% select(lat.0:year),
-          query = data_prep %>% filter(flag == "partial") %>% select(lat.0:year),
-          k = 5)
-index_leave <- nn[[1]] %>% as.vector() %>% unique()
-data_prep$flag_train_prep <- rownames(data_prep) %in% index_leave
-
-
-
-
-
-f_knn <- function(df_train = data_prep %>% filter(flag_train_prep == TRUE), 
-                  df_pred = data_prep, col){
-  
-  formula <- as.formula(substitute(col ~ lat.0 + lon.0 + yday + year, list(col = as.name(col))))
-  
-  knn_model <- knnreg(formula = formula, 
-                      data = df_train,
-                      k = 5)
-  col <- quo_name(enquo(col))
-  
-  
-  predict(knn_model, newdata = df_pred)
-  
-}
-
-
-data_prepped <- data_prep %>%
-  filter(flag == 'partial') %>% 
-  mutate(temp_min =  f_knn(df_pred = ., col = "temp_min"),
-         temp_max =  f_knn(df_pred = ., col = "temp_max"),
-         precip =    f_knn(df_pred = ., col = "precip")) %>% 
-  union_all(data_prep %>% filter(flag != "partial"))
-
-
-
-# Final prediction
-
-nn <- nn2(data = data_prepped %>% filter(flag != "missing") %>% select(lat.0:year),
-          query = data_prepped %>% filter(flag == "missing") %>% select(lat.0:year),
-          k = 5)
-
-index_leave <- nn[[1]] %>% as.vector() %>% unique()
-
-data_prepped$flag_train <- rownames(data_prepped) %in% index_leave
-
-
-
-data_predicted <- data_prepped %>% 
-  filter(flag == 'missing') %>% 
-  mutate(temp_mean = f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "temp_mean"),
-         temp_min =  f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "temp_min"),
-         temp_max =  f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "temp_max"),
-         precip =    f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "precip"),
-         snow =      f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "snow"),
-         is_element= f_knn(df_pred = ., df_train = data_prepped %>% filter(flag_train == TRUE), col = "is_element")) %>% 
-  union_all(data_prep %>% filter(flag != "missing"))
-
+result_predicted <- result_summed %>%
+  filter(is_na == 1) %>% 
+  ##I just can't work this into the function... I give up
+  mutate(temp_mean = if_else(is.na(temp_mean), f_knn(df_pred = ., col = "temp_mean"), temp_mean),
+         temp_max = if_else(is.na(temp_max), f_knn(df_pred = ., col = "temp_max"), temp_max),
+         temp_min = if_else(is.na(temp_min), f_knn(df_pred = ., col = "temp_min"), temp_min),
+         precip = if_else(is.na(precip), f_knn(df_pred = ., col = "precip"), precip),
+         snow = if_else(is.na(snow), f_knn(df_pred = ., col = "snow"), snow),
+         is_rain = if_else(is.na(is_rain), f_knn(df_pred = ., col = "is_rain"), is_rain),
+         is_snow = if_else(is.na(is_snow), f_knn(df_pred = ., col = "is_snow"), is_snow)) %>% 
+  union_all(result_summed %>% filter(is_na == 0))
 
 
 ## Checkpoint
-save(data_predicted, file = "data/3-predict.RData")
+save(result_predicted, file = "data/3-predict.RData")
 
 
 # 4. Final ----------------------------------------------------------------
 
-library(maps)
-library(ggthemes)
-library(scales)
 
 # library(tidyverse)
 # library(lubridate)
@@ -425,14 +380,16 @@ p_temp_mean_high <- 75
 p_precip <- 0.1
 
 
-w_pleasant <- data_predicted %>% 
+w_pleasant <- result_predicted %>% 
+  left_join(loc_msa %>% select(geoid, type), by = "geoid") %>% 
   mutate(day = day(date),
          month = month(date)) %>% 
   mutate(pleasant = if_else(temp_min >= p_temp_min &
                               temp_max <= p_temp_max &
                               temp_mean >= p_temp_mean_low & temp_mean <= p_temp_mean_high & 
                               precip <= p_precip &
-                              is_element < 0.5,
+                              is_rain < 0.5 &
+                              is_snow < 0.5,
                             1,
                             0),
          hot = if_else(temp_max > p_temp_max |
@@ -443,52 +400,26 @@ w_pleasant <- data_predicted %>%
                           temp_mean < p_temp_mean_low,
                         1,
                         0),
-         elements = if_else(is_element >= .5 |
-                              precip > 0.3 |
-                              snow > 0, 
+         elements = if_else(is_rain >= .5 |
+                              is_snow >= 0.5 |
+                              precip > 0.3,
                             1, 0),
          distinct_class = case_when(pleasant == 1 ~ "pleasant",
                                     hot == 1      ~ "hot",
                                     elements == 1 ~ "elements",
                                     cold == 1     ~ "cold",
+                                    TRUE          ~ NA_character_),
+         double_class =   case_when(pleasant == 1 ~ "pleasant",
+                                    hot == 1 & elements == 0  ~ "hot",
+                                    hot == 1 & elements == 1  ~ "hot & elements",
+                                    cold == 1 & elements == 0    ~ "cold",
+                                    cold == 1 & elements == 1    ~ "cold & elements",
+                                    elements == 1    ~ "elements",
                                     TRUE          ~ NA_character_))
 
-msa_pleasant <- loc_msa %>% 
-  left_join(w_pleasant, by = c("lat.0", "lon.0"))
 
 
-
-
-loc_top1000 %>% 
-  arrange(desc(as.integer(population))) %>% 
-  head(25) %>% 
-  left_join(w_pleasant, by = c("lat.0", "lon.0")) %>% 
-  
-  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
-  ggplot(aes(x=day, y = month, fill = distinct_class)) +
-  geom_tile(col = "black") +
-  facet_wrap(~city) +
-  theme_fivethirtyeight() + 
-  scale_fill_manual(values = c(pleasant = "#1a9641", 
-                               hot = "#d7191c", 
-                               cold = "#0571b0", 
-                               elements = "#b3cde3"), 
-                    name = "Distinct classification")+
-  theme(panel.grid.major = element_blank()) +
-  coord_equal()
-
-
-
-# msa_pleasant %>% 
-#   filter(name == "Jacksonville, FL") %>% 
-# ggplot(aes(x=date, alpha = as.factor(pleasant))) +
-#   geom_point(aes(y = temp_mean), col = "grey")+
-#   geom_point(aes(y = temp_max), col = "red") +
-#   geom_point(aes(y = temp_min), col = "blue") +
-#   facet_wrap(~ year, scales = "free")
-
-
-msa_pleasant %>% 
+w_pleasant %>% 
   filter(year == 2017 &
            name %in% c("Seattle-Tacoma-Bellevue, WA", 
                        "Jacksonville, FL",
@@ -512,20 +443,23 @@ msa_pleasant %>%
   theme(panel.grid.major = element_blank()) +
   coord_equal()
 
-msa_summary <- msa_pleasant %>% 
-  group_by(name, year) %>% 
+w_summary_msa <- w_pleasant %>% 
+  filter(type == "Metro Area") %>% 
+  group_by(geoid, name, year) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
-  group_by(name) %>% 
+  group_by(geoid, name) %>% 
   summarise(pleasant = mean(pleasant)) %>% 
-  mutate(rank = row_number(desc(pleasant)))
+  ungroup() %>% 
+  mutate(rank = row_number(desc(pleasant)),
+         name2 = reorder(name, rank))
 
-msa_top25 <- msa_summary %>% 
+w_top25_msa <- w_summary_msa %>% 
   filter(rank <= 25) %>% 
   mutate(name2 = reorder(name, rank))
 
-msa_pleasant %>% 
-  inner_join(msa_top25, by = "name") %>% 
+w_pleasant %>% 
+  inner_join(w_summary_msa %>% filter(rank <= 25), by = "geoid") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = distinct_class)) +
@@ -541,7 +475,42 @@ msa_pleasant %>%
   coord_equal()
 
 
+w_pleasant %>% 
+  inner_join(w_summary_msa %>% filter(rank <= 25), by = "geoid") %>% 
+  filter(year == 2017) %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = double_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~name2) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#756bb1",
+                               `hot & elements` = "#e6550d",
+                               `cold & elements` = "#9ecae1"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
 
+
+w_pleasant %>% 
+  inner_join(w_summary_msa %>% filter(rank >= nrow(w_summary_msa) - 25), by = "geoid") %>% 
+  filter(year == 2017) %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = double_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~name2) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d7191c", 
+                               cold = "#0571b0", 
+                               elements = "#756bb1",
+                               `hot & elements` = "#e6550d",
+                               `cold & elements` = "#9ecae1"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
 
 
 
