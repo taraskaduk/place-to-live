@@ -1,8 +1,11 @@
+library(maps)
+library(lubridate)
 library(tidyverse)
 
 setwd("weather")
 
-# Stations -----------------------------------------------------------------
+
+# 1.1 Import stations ---------------------------------------------------------------
 
 # path_stations <- "ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.txt"
 path_stations <- "data/0-raw/isd-history.txt"
@@ -29,15 +32,30 @@ stations <- stations_import %>%
          elev = `elev(m)`) %>% 
   filter(!is.na(usaf) & !(is.na(lat) | is.na(lon)))
 
+
 stations_us <- stations %>% 
-  filter(lat <= 49 & lat >= 24 & lon <= -66 & lon >= -125)
+  #USA doesn't include AK, HI, PR. We start at the world level
+  mutate(country = map.where('world', lon, lat)) %>% 
+  filter(
+    # by filtering out everything not USA, we're losing some precision for towns on the border,
+    # but the US data alone is rich enough.
+    (str_detect(country, "USA") == TRUE |  str_detect(country, "Puerto Rico") == TRUE) & lon < 0 &
+      # remove old stations
+      year(end) >= year(today()) & year(begin) <= 2012
+  )
 
 
-# Data --------------------------------------------------------------------
+ggplot(stations_us, aes(x=lon, y = lat)) + 
+  geom_point(size = 0.5, alpha = 0.4) +
+  theme_bw()
+
+
+# 1.2.1 Import weather data --------------------------------------------------
 
 weather_data_raw <- NULL
+p_yearend <- year(Sys.Date()) - 1
 
-for (year in 2012) {
+for (year in 2012:p_yearend) {
   
   destfile <- paste0('data/0-raw/gsod/gsod_',year,'.op.gz')
   path_untar <- 'data/0-raw/gsod/untar'
@@ -47,7 +65,7 @@ for (year in 2012) {
   files_all <- list.files(path = path_untar)
   files_stations <- paste0(stations_us$usaf, "-", stations_us$wban, "-", year, ".op.gz")
   files_keep <- subset(files_all, files_all %in% files_stations)
-
+  
   
   data_raw <- map_df(paste0(path_untar, "/",files_keep),
                      read_table,
@@ -62,23 +80,25 @@ for (year in 2012) {
     rename(stn = `stn---`, date = yearmoda, temp_mean = temp, temp_min = min, temp_max = max)
   
   weather_data_raw <- rbind(weather_data_raw, data_raw_renamed)
-  #file.remove(destfile)
-  #unlink(file, recursive = TRUE)
   
 }
 
-weather_data <- weather_data_raw %>%
+
+# 1.2.2 Clean weather data ------------------------------------------------------
+
+data_weather <- weather_data_raw %>%
   select(stn, wban, date, temp_mean, temp_min, temp_max, precip = prcp, snow = sndp, pressure = stp, wind = wdsp, gust, frshtt) %>%
+  ##read txt file for instructions. Different letters designate different periods during which the data was collected.
   mutate(prcp_hours = case_when(str_detect(precip, "A") ~ 6,
-                           str_detect(precip, "B") ~ 12,
-                           str_detect(precip, "C") ~ 18,
-                           str_detect(precip, "D") ~ 24,
-                           str_detect(precip, "E") ~ 12,
-                           str_detect(precip, "F") ~ 24,
-                           str_detect(precip, "G") ~ 24,
-                           str_detect(precip, "H") ~ 1,
-                           str_detect(precip, "I") ~ 1,
-                           TRUE ~ NA_real_)) %>% 
+                                str_detect(precip, "B") ~ 12,
+                                str_detect(precip, "C") ~ 18,
+                                str_detect(precip, "D") ~ 24,
+                                str_detect(precip, "E") ~ 12,
+                                str_detect(precip, "F") ~ 24,
+                                str_detect(precip, "G") ~ 24,
+                                str_detect(precip, "H") ~ 1,
+                                str_detect(precip, "I") ~ 1,
+                                TRUE ~ NA_real_)) %>% 
   map_df(~ str_replace_all(.,'A|B|C|D|E|F|G|H|I|\\*', '')) %>%
   map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', 'prcp_hours', 'gust', 'wind', 'pressure'), as.numeric, na.rm = TRUE) %>%
   dplyr::bind_rows() %>% 
@@ -96,6 +116,76 @@ weather_data <- weather_data_raw %>%
   select(-frshtt, -prcp_hours)
 
 
-#############
 
-save(weather_data, stations_us, file = "data/1-import.RData")
+
+
+# 1.3 Import locations ------------------------------------------------------------
+
+path_raw <- "data/0-raw/"
+path_msa <- paste0(path_raw,"2015_Gaz_cbsa_national.txt")
+
+locations <- read_delim(path_msa, 
+                        "\t", escape_double = FALSE, 
+                        locale = locale(encoding = "LATIN1", 
+                                        asciify = TRUE),
+                        col_types = cols(ALAND = col_skip(), 
+                                         ALAND_SQMI = col_skip(), 
+                                         AWATER = col_skip(), 
+                                         AWATER_SQMI = col_skip(),
+                                         GEOID = col_character()), 
+                        trim_ws = TRUE) %>% 
+  rename(csafp = CSAFP,
+         geoid = GEOID,
+         name = NAME,
+         lat = INTPTLAT,
+         lon = INTPTLONG,
+         type = CBSA_TYPE) %>% 
+  select(-type) %>% 
+  separate(name, c("name", "type"), sep = -10) %>% 
+  mutate(name = trimws(name)) 
+
+
+path_msa_pop <- paste0(path_raw,"PEP_2017_PEPANNRES.csv")
+locations_pop <- read_csv(path_msa_pop, 
+                          col_types = cols(GEO.id2 = col_character()),
+                          locale = locale(encoding = "LATIN1", 
+                                          asciify = TRUE),
+                          trim_ws = TRUE) %>% 
+  select(geoid = GEO.id2,
+         pop10 = rescen42010,
+         pop17 = respop72017)
+
+locations <- left_join(locations, locations_pop, by = "geoid") %>% 
+  mutate(lat0 = round(lat,0),
+         lon0 = round(lon,0),
+         lat05 = round(2*lat,0)/2,
+         lon05 = round(2*lon,0)/2)
+
+
+
+ggplot() + 
+  theme_void() +
+  scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(25, 50)) +
+  coord_equal()+
+  geom_point(data = locations, aes(x=lon, y = lat, col = type),alpha = 0.3, size = 1)
+
+ggplot() + 
+  theme_void() +
+  scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(25, 50)) +
+  coord_equal()+
+  geom_point(data = locations, aes(x=lon0, y = lat0), col = 'blue',alpha = 0.3)
+
+ggplot() + 
+  theme_void() +
+  scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(25, 50)) +
+  coord_equal()+
+  geom_point(data = locations, aes(x=lon05, y = lat05), col = 'blue',alpha = 0.3)
+
+
+
+
+# 1.4 Save necessary data -----------------------------------------------------
+save(data_weather, stations_us, locations, file = "data/1-import.RData")

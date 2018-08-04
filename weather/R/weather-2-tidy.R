@@ -1,67 +1,135 @@
-# Libraries ---------------------------------------------------------
-library(tidyverse)
+library(RANN)
+library(caret)
 library(lubridate)
+library(tidyverse)
 
 setwd("weather")
-
-# Import ------------------------------------------------------------------
-
 load("data/1-import.RData")
 
-# Data --------------------------------------------------------------------
+
+# 2.1 Tidy -----------------------------------------------------------------
+
 stations_join <- stations_us %>% 
   select(usaf, wban, lat, lon)
 
-weather <- weather_data %>% 
+data_coords <- data_weather %>% 
   inner_join(stations_join, by = c('stn' = 'usaf', 'wban'))
 
-w_mutated <- weather %>% 
-  mutate(lat.0 = round(lat,0),
-         lon.0 = round(lon,0),
-         flag = "existing",
-         day = if_else(day(date) == 29 & month(date) == 2, 28, as.numeric(day(date))),
-         date = date(ISOdate(year(date),month(date),day))
-         ) %>% 
-  select(-c(lat, lon, stn, wban, day)) %>% 
-  group_by(lat.0, lon.0, flag, date) %>% 
-  summarise_all(funs(mean, max), na.rm = TRUE) %>% 
-  select(lat.0:date,
-         temp_mean = temp_mean_mean,
-         temp_min = temp_min_mean,
-         temp_max = temp_max_mean,
-         precip = precip_max,
-         snow = snow_max,
-         pressure = pressure_mean,
-         wind = wind_mean,
-         gust = gust_mean,
-         is_fog = is_fog_max,
-         is_rain = is_rain_max,
-         is_snow = is_snow_max,
-         is_hail = is_hail_max,
-         is_thunder = is_thunder_max,
-         is_tornado = is_tornado_max) %>% 
+#This creates a list of stations with consistent observations over time
+stations_stable <- data_coords %>% 
+  group_by(stn, wban, lat, lon, year(date)) %>% 
+  count() %>% 
+  group_by(stn, wban, lat, lon) %>% 
+  summarise(min = min(n)) %>% 
+  filter(min > 365*0.9) %>% 
+  ungroup()
+
+
+nn <- nn2(data = stations_stable %>% select(lat,lon),
+          query = locations %>% select(lat,lon),
+          k = 5)
+index_leave <- nn[[1]] %>% as.vector() %>% unique()
+
+## This one create a column rather than filters out. Uncomment - Imma filter out this time
+#data_stable$nn <- rownames(data_stable) %in% index_leave
+
+stations_nn <- stations_stable %>% 
+  mutate(index = rownames(.)) %>% 
+  .[index_leave, ]
+
+
+data_nn <- data_coords %>% 
+  inner_join(stations_nn %>% select(stn, wban, index), by = c("stn", "wban"))
+
+
+loc_nn <- locations %>% 
+  cbind(as_data_frame(nn[[1]]))
+
+
+
+result_dummy <- loc_nn %>% 
+  select(geoid, name, lat, lon, V1:V5) %>% 
+  distinct() %>% 
+  merge(tibble(date = seq.Date(date("2012-01-01"), date("2017-12-31"), by = "day")), all = TRUE)
+
+result_gathered <- result_dummy %>% 
+  mutate(year = year(date),
+         yday = yday(date)) %>% 
+  gather(key = "neighbor", value = "index", c(V1:V5)) %>% 
+  mutate(index = as.character(index))
+
+data_tojoin <- data_nn %>% 
+  mutate(date = as.Date(date)) %>% 
+  select(index, date, temp_mean:snow, is_rain, is_snow)
+
+result_joined <- result_gathered %>% 
+  left_join(data_tojoin, by=c("index", "date"))
+
+
+
+result_summed <- result_joined %>% 
+  group_by(geoid, name, lat, lon, date, year, yday) %>% 
+  summarise(temp_mean = mean(temp_mean, na.rm = TRUE),
+            temp_min = mean(temp_min, na.rm = TRUE),
+            temp_max = mean(temp_max, na.rm = TRUE),
+            precip = max(precip, na.rm = TRUE),
+            snow = max(snow, na.rm = TRUE),
+            is_rain = max(is_rain, na.rm = TRUE),
+            is_snow = max(is_snow, na.rm = TRUE)) %>% 
   ungroup() %>% 
-  purrr::map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', 'pressure', 'wind', 'gust'), ~ifelse(is.nan(.x) | is.infinite(.x), NA, .x)) %>% 
-  bind_rows()
+  purrr::map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', "is_rain", "is_snow"), ~ifelse(is.nan(.x) | is.infinite(.x), NA, .x)) %>% 
+  bind_rows() %>% 
+  mutate(is_na = if_else(rowSums(is.na(.)) > 0, 1, 0))
 
 
-coords <- w_mutated %>% 
-  select(lat.0, lon.0) %>% 
-  distinct()
 
-dummy <- tibble(date = seq.Date(date("2012-01-01"), date("2017-12-31"), by = "day")) %>% 
-  filter(!(day(date)==29 & month(date)==2)) %>% 
-  mutate(flag = "missing") %>% 
-  merge(coords, all = TRUE)
 
-data_missing <- dummy %>% 
-  anti_join(w_mutated, by = c("lat.0","lon.0","date"))
 
-data_all <- w_mutated %>% 
-  union_all(data_missing) %>% 
-  mutate(yday = if_else(leap_year(date) & yday(date) > 60, yday(date) - 1, yday(date)),
-         year = year(date))
 
-data_all %>% group_by(flag) %>% count()
+knn_train <- data_nn %>% 
+  select(lat, lon, date:snow, is_rain, is_snow) %>% 
+  mutate(year = year(date),
+         yday = yday(date))
 
-save(data_all, file = "data/2-tidy.RData")
+
+
+f_knn <- function(df_train = knn_train, 
+                  df_pred, col){
+  
+  nn <- nn2(data = df_train %>% select(lat,lon,yday,year),
+            query = df_pred %>% select(lat,lon,yday,year),
+            k = 5)
+  i_nn <- nn[[1]] %>% as.vector() %>% unique()
+  
+  df_train_nn <- df_train[i_nn, ]
+  
+  formula <- as.formula(substitute(col ~ lat + lon + yday + year, list(col = as.name(col))))
+  knn_model <- knnreg(formula = formula, 
+                      data = df_train_nn,
+                      k = 5)
+  col <- quo_name(enquo(col))
+  
+  predict(knn_model, newdata = df_pred)
+  
+}
+
+
+## This is where it will probably choke...
+
+result_predicted <- result_summed %>%
+  filter(is_na == 1) %>% 
+  ##I just can't work this into the function... I give up
+  mutate(temp_mean = if_else(is.na(temp_mean), f_knn(df_pred = ., col = "temp_mean"), temp_mean),
+         temp_max = if_else(is.na(temp_max), f_knn(df_pred = ., col = "temp_max"), temp_max),
+         temp_min = if_else(is.na(temp_min), f_knn(df_pred = ., col = "temp_min"), temp_min),
+         precip = if_else(is.na(precip), f_knn(df_pred = ., col = "precip"), precip),
+         snow = if_else(is.na(snow), f_knn(df_pred = ., col = "snow"), snow),
+         is_rain = if_else(is.na(is_rain), f_knn(df_pred = ., col = "is_rain"), is_rain),
+         is_snow = if_else(is.na(is_snow), f_knn(df_pred = ., col = "is_snow"), is_snow)) %>% 
+  union_all(result_summed %>% filter(is_na == 0))
+
+
+data <- result_predicted
+
+## Checkpoint
+save(data, locations, file = "data/2-tidy.RData")

@@ -22,3 +22,4 @@ curl::curl_download('http://www2.census.gov/geo/docs/maps-data/data/gazetteer/20
 
 
 # https://factfinder.census.gov/faces/tableservices/jsf/pages/productview.xhtml?pid=PEP_2017_PEPANNRES&prodType=table
+# https://www.census.gov/geographies/reference-files/time-series/demo/metro-micro/delineation-files.html
