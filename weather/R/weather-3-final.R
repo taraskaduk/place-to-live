@@ -26,7 +26,9 @@ pleasant <- data %>%
   mutate(day = day(date),
          month = month(date),
          lat0 = round(lat,0),
-         lon0 = round(lon,0)) %>% 
+         lon0 = round(lon,0),
+         lat05 = round(2*lat,0)/2,
+         lon05 = round(2*lon,0)/2) %>% 
   mutate(pleasant = if_else(temp_min >= p_temp_min &
                               temp_max <= p_temp_max &
                               temp_mean >= p_temp_mean_low & temp_mean <= p_temp_mean_high & 
@@ -91,10 +93,10 @@ pleasant <- data %>%
 # MAP ---------------------------------------------------------------------
 
 pleasant_summary <- pleasant %>% 
-  group_by(lat0, lon0, year) %>% 
+  group_by(geoid, lat05, lon05, year) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
-  group_by(lat0, lon0) %>% 
+  group_by(lat05, lon05) %>% 
   summarise(pleasant = mean(pleasant)) %>% 
   mutate(pleasant_cat = case_when(pleasant >=300 ~ "Over 300",
                                   pleasant >=200 ~ "200 - 299",
@@ -104,28 +106,34 @@ pleasant_summary <- pleasant %>%
          pleasant_cat = factor(pleasant_cat, levels = c("Less than 50", "50 - 99", "100 - 199", "200 - 299", "Over 300")))
 
 
-lat <- data_frame(lat0 = seq(-90, 90, by = 1))
-lon <- data_frame(lon0 = seq(-180, 180, by = 1))
+lat <- data_frame(lat05 = seq(-90, 90, by = .5))
+lon <- data_frame(lon05 = seq(-180, 180, by = .5))
 dots <- lat %>% 
   merge(lon, all = TRUE)
 
 dots <- dots %>% 
-  mutate(country = maps::map.where('state', lon0, lat0),
-         lakes = maps::map.where('lakes', lon0, lat0)) %>% 
+  mutate(country = maps::map.where('state', lon05, lat05),
+         lakes = maps::map.where('lakes', lon05, lat05)) %>% 
   filter(!is.na(country) & is.na(lakes)) %>% 
   select(-lakes)
 
 
 
 ggplot() + 
-  geom_point(data = dots, aes(x=lon0, y = lat0), col = "grey90", size = 6) +
-  geom_point(data = pleasant_summary %>% filter(pleasant_cat == "Over 300"), aes(x=lon0, y=lat0), col = "red", size = 9, alpha = 0.4) +
-  geom_point(data = pleasant_summary %>% filter(pleasant_cat == "200 - 299"), aes(x=lon0, y=lat0), col = "red", size = 8, alpha = 0.3) +
-  geom_point(data = pleasant_summary, aes(x=lon0, y=lat0, col=pleasant_cat), size = 6) +
+  geom_point(data = dots, aes(x=lon05, y = lat05), col = "grey90", size = 3) +
+  #geom_point(data = pleasant_summary %>% filter(pleasant_cat == "Over 300"), aes(x=lon0, y=lat0), col = "red", size = 9, alpha = 0.4) +
+  #geom_point(data = pleasant_summary %>% filter(pleasant_cat == "200 - 299"), aes(x=lon0, y=lat0), col = "red", size = 8, alpha = 0.3) +
+  geom_point(data = pleasant_summary, aes(x=lon05, y=lat05, col=pleasant_cat), size = 3) +
   # scale_color_brewer(type = "seq", name = "Pleasant days") +
   scale_x_continuous(limits = c(-125, -60)) +
   scale_y_continuous(limits = c(25, 50)) +
-  scale_colour_manual(values = c("#deebf7", "#c6dbef", "#4292c6", "#2171b5", "#08306b"), name = "Pleasant days") +
+  #scale_color_brewer(type = "div", palette = "RdBu")+
+  scale_colour_manual(values = c("#f4a582",
+                                 "#fddbc7", 
+                                 "#92c5de", 
+                                 "#4393c3", 
+                                 "#2166ac"), 
+                      name = "Pleasant days") +
   theme_fivethirtyeight() +
   theme(
     axis.title=element_blank(),
@@ -139,16 +147,15 @@ ggplot() +
 
 
 ggplot() +
-  geom_point(data = dots, aes(x=lon0, y = lat0), col = "grey90", size = 6) +
-  geom_point(data = pleasant_summary, aes(x=lon0, y=lat0, col=pleasant), size = 6, alpha = 0.4) +
-  geom_point(data = pleasant_summary, aes(x=lon0, y=lat0, col=pleasant, alpha = pleasant), size = 6) +
+  geom_point(data = dots, aes(x=lon05, y = lat05), col = "grey90", fill = "grey95", size = 2, pch=21) +
+  geom_point(data = pleasant_summary, aes(x=lon05, y=lat05, col=pleasant), size = 2) +
+  #geom_point(data = pleasant_summary, aes(x=lon0, y=lat0, col=pleasant, alpha = pleasant), size = 6) +
 
-  scale_colour_gradient2(low = "grey85",
-                         high = "darkblue",
-
-                         na.value = "grey85") +
+  scale_color_gradient(low = "#d1e5f0",
+                         high = "#2166ac",
+                         na.value = "grey90") +
   scale_x_continuous(limits = c(-125, -60)) +
-  scale_y_continuous(limits = c(25, 50)) +
+  scale_y_continuous(limits = c(24, 50)) +
   theme_fivethirtyeight() +
   theme(legend.position="none",
         axis.title=element_blank(),
@@ -158,6 +165,32 @@ ggplot() +
        caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
        Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
        taraskaduk.com | @taraskaduk")
+
+
+ggplot() +
+  geom_point(data = dots, aes(x=lon05, y = lat05), col = "grey90", fill = "grey95", size = 2, pch=21) +
+  geom_point(data = pleasant_summary, aes(x=lon05, y=lat05, col=pleasant), size = 2) +
+  #geom_point(data = pleasant_summary, aes(x=lon0, y=lat0, col=pleasant, alpha = pleasant), size = 6) +
+  
+  scale_color_gradient2(low = "#99000d",
+                        mid = "#fcbba1",
+                       high = "#fee0d2",
+                       midpoint = 110,
+                       na.value = "grey90") +
+  scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(24, 50)) +
+  theme_fivethirtyeight() +
+  theme(legend.position="none",
+        axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank())+
+  labs(title = "Places with most pleasant days in a year",
+       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
+       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
+       taraskaduk.com | @taraskaduk")
+
+
+
 summary_metro <- pleasant %>% 
   filter(type == "Metro Area") %>% 
   group_by(geoid, name, year) %>% 
