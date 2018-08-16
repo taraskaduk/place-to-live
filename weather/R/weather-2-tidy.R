@@ -6,7 +6,6 @@ library(tidyverse)
 setwd("weather")
 load("data/1-import.RData")
 
-
 # 2.1 Tidy -----------------------------------------------------------------
 
 stations_join <- stations_us %>% 
@@ -21,14 +20,35 @@ stations_stable <- data_coords %>%
   count() %>% 
   group_by(stn, wban, lat, lon) %>% 
   summarise(min = min(n)) %>% 
-  filter(min > 365*0.9) %>% 
+  filter(min > 365*0.75) %>% 
   ungroup()
 
 
 nn <- nn2(data = stations_stable %>% select(lat,lon),
           query = locations %>% select(lat,lon),
           k = 5)
-index_leave <- nn[[1]] %>% as.vector() %>% unique()
+
+
+##So, radius var in nn2 foesn't seem to filter out stations far away. PR ends up pulling Miami stations. The next sequence addresses it.
+nn1_df <- as_data_frame(nn[[1]]) %>% 
+  mutate(i = rownames(.)) %>% 
+  gather(V, index, V1:V5)
+  
+nn2_df <- as_data_frame(nn[[2]]) %>% 
+  mutate(i = rownames(.)) %>% 
+  gather(V, dist, V1:V5)
+  
+nn_df <- nn1_df %>% 
+  inner_join(nn2_df, by = c("i", "V")) %>% 
+  #and this is where I filter out remote locations
+  mutate(index = if_else(dist <= 2, index, NA_integer_))
+
+nn_df_spread <- nn_df %>% 
+  select(-dist) %>% 
+  spread(V, index)
+
+index_leave <- nn_df$index %>% as.vector() %>%  unique()
+
 
 ## This one create a column rather than filters out. Uncomment - Imma filter out this time
 #data_stable$nn <- rownames(data_stable) %in% index_leave
@@ -43,19 +63,20 @@ data_nn <- data_coords %>%
 
 
 loc_nn <- locations %>% 
-  cbind(as_data_frame(nn[[1]]))
+  mutate(i = rownames(.)) %>% 
+  inner_join(nn_df_spread, by = "i")
 
 
 
 result_dummy <- loc_nn %>% 
-  select(geoid, name, lat, lon, V1:V5) %>% 
+  select(geoid, name, lat, lon, V1:V3) %>% 
   distinct() %>% 
-  merge(tibble(date = seq.Date(date("2012-01-01"), date("2017-12-31"), by = "day")), all = TRUE)
+  merge(tibble(date = seq.Date(date("2013-01-01"), date("2017-12-31"), by = "day")), all = TRUE)
 
 result_gathered <- result_dummy %>% 
   mutate(year = year(date),
          yday = yday(date)) %>% 
-  gather(key = "neighbor", value = "index", c(V1:V5)) %>% 
+  gather(key = "neighbor", value = "index", c(V1:V3)) %>% 
   mutate(index = as.character(index))
 
 data_tojoin <- data_nn %>% 
@@ -133,3 +154,4 @@ data <- result_predicted
 
 ## Checkpoint
 save(data, locations, file = "data/2-tidy.RData")
+

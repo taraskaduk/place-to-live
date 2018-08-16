@@ -41,7 +41,7 @@ stations_us <- stations %>%
     # but the US data alone is rich enough.
     (str_detect(country, "USA") == TRUE |  str_detect(country, "Puerto Rico") == TRUE) & lon < 0 &
       # remove old stations
-      year(end) >= year(today()) & year(begin) <= 2012
+      year(end) >= year(today()) & year(begin) <= 2013
   )
 
 
@@ -55,7 +55,7 @@ ggplot(stations_us, aes(x=lon, y = lat)) +
 weather_data_raw <- NULL
 p_yearend <- year(Sys.Date()) - 1
 
-for (year in 2012:p_yearend) {
+for (year in 2013:p_yearend) {
   
   destfile <- paste0('data/0-raw/gsod/gsod_',year,'.op.gz')
   path_untar <- 'data/0-raw/gsod/untar'
@@ -105,7 +105,9 @@ data_weather <- weather_data_raw %>%
   # precipitation and snowfall NAs can be converted to 0 for this project
   # (see data description for details)
   # except for the one notated with an I
-  replace_na(replace = list(precip = 0, snow = 0)) %>% 
+  
+  # 2018-08-15 Change my mind - There is something weird about snow and precip. I may need to treat NAs as NAs...
+  ##replace_na(replace = list(precip = 0, snow = 0)) %>% 
   mutate(precip = precip / prcp_hours) %>% 
   mutate(is_fog     = as.integer(substr(frshtt, 1,1)),
          is_rain    = as.integer(substr(frshtt, 2,2)),
@@ -145,12 +147,13 @@ locations <- read_delim(path_msa,
   mutate(name = trimws(name)) 
 
 
-path_msa_pop <- paste0(path_raw,"PEP_2017_PEPANNRES.csv")
+path_msa_pop <- paste0(path_raw,"PEP_2017_PEPANNRES_with_ann.csv")
 locations_pop <- read_csv(path_msa_pop, 
                           col_types = cols(GEO.id2 = col_character()),
                           locale = locale(encoding = "LATIN1", 
                                           asciify = TRUE),
                           trim_ws = TRUE) %>% 
+  filter(GEO.id != "Id") %>% 
   select(geoid = GEO.id2,
          pop10 = rescen42010,
          pop17 = respop72017)
@@ -169,6 +172,7 @@ ggplot() +
   scale_y_continuous(limits = c(25, 50)) +
   coord_equal()+
   geom_point(data = locations, aes(x=lon, y = lat, col = type),alpha = 0.3, size = 1)
+
 
 ggplot() + 
   theme_void() +
@@ -189,3 +193,4 @@ ggplot() +
 
 # 1.4 Save necessary data -----------------------------------------------------
 save(data_weather, stations_us, locations, file = "data/1-import.RData")
+

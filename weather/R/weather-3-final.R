@@ -22,7 +22,7 @@ p_precip <- 0.1
 
 
 pleasant <- data %>% 
-  left_join(locations %>% select(geoid, type), by = "geoid") %>% 
+  left_join(locations %>% select(geoid, type, pop17), by = "geoid") %>% 
   mutate(day = day(date),
          month = month(date),
          lat0 = round(lat,0),
@@ -128,11 +128,10 @@ ggplot() +
   scale_x_continuous(limits = c(-125, -60)) +
   scale_y_continuous(limits = c(25, 50)) +
   #scale_color_brewer(type = "div", palette = "RdBu")+
-  scale_colour_manual(values = c("#f4a582",
-                                 "#fddbc7", 
-                                 "#92c5de", 
-                                 "#4393c3", 
-                                 "#2166ac"), 
+  scale_colour_manual(values = c("#bdd7e7",
+                                 "#6baed6", 
+                                 "#2171b5", 
+                                 "#08306b"), 
                       name = "Pleasant days") +
   theme_fivethirtyeight() +
   theme(
@@ -146,8 +145,11 @@ ggplot() +
 
 
 
+
+
+
 ggplot() +
-  geom_point(data = dots, aes(x=lon05, y = lat05), col = "grey90", fill = "grey95", size = 2, pch=21) +
+  geom_point(data = dots, aes(x=lon05, y = lat05), col = "grey85", fill = "grey95", size = 2, pch=21) +
   geom_point(data = pleasant_summary, aes(x=lon05, y=lat05, col=pleasant), size = 2) +
   #geom_point(data = pleasant_summary, aes(x=lon0, y=lat0, col=pleasant, alpha = pleasant), size = 6) +
 
@@ -193,14 +195,15 @@ ggplot() +
 
 summary_metro <- pleasant %>% 
   filter(type == "Metro Area") %>% 
-  group_by(geoid, name, year) %>% 
+  group_by(geoid, name, year, pop17) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
-  group_by(geoid, name) %>% 
+  group_by(geoid, name, pop17) %>% 
   summarise(pleasant = mean(pleasant)) %>% 
   ungroup() %>% 
   mutate(rank = row_number(desc(pleasant)),
-         name2 = reorder(name, rank))
+         name2 = reorder(name, rank),
+         pop17 = as.integer(pop17))
 
 
 
@@ -247,8 +250,31 @@ ggsave("top25.png",
        dpi = 250)
 
 
+
+
+
+
 pleasant %>% 
-  inner_join(summary_metro %>% filter(rank <= 25), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(rank <= 50), by = "geoid") %>% 
+  filter(year == 2017) %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = double_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~name2) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d6604d", 
+                               cold = "#4393c3", 
+                               elements = "#bebada",
+                               `hot & elements` = "#ca0020",
+                               `cold & elements` = "#0571b0"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()
+
+
+pleasant %>% 
+  inner_join(summary_metro %>% filter(rank >= nrow(summary_metro) - 50), by = "geoid") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
@@ -267,7 +293,7 @@ pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(rank >= nrow(summary_metro) - 10), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(pop17 > 1000000), by = "geoid") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
@@ -275,152 +301,12 @@ pleasant %>%
   facet_wrap(~name2) +
   theme_fivethirtyeight() + 
   scale_fill_manual(values = c(pleasant = "#1a9641", 
-                               hot = "#d7191c", 
-                               cold = "#0571b0", 
-                               elements = "#756bb1",
-                               `hot & elements` = "#e6550d",
-                               `cold & elements` = "#9ecae1"), 
+                               hot = "#d6604d", 
+                               cold = "#4393c3", 
+                               elements = "#bebada",
+                               `hot & elements` = "#ca0020",
+                               `cold & elements` = "#0571b0"), 
                     name = "Distinct classification")+
   theme(panel.grid.major = element_blank()) +
   coord_equal()
-
-
-
-pleasant %>% 
-  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
-  ggplot(aes(x=day, y = year, fill = as.factor(elements)), col = grey) +
-  geom_tile() +
-  facet_wrap( ~ month) +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank()) +
-  scale_fill_fivethirtyeight()+
-  coord_equal()
-
-pleasant %>% 
-  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
-  ggplot(aes(x=day, y = year, fill = precip), col = grey) +
-  geom_tile() +
-  facet_wrap( ~ month) +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank()) +
-  coord_equal()
-
-pleasant %>% 
-  filter(name == "Seattle-Tacoma-Bellevue, WA") %>% 
-  group_by(year, month) %>% 
-  summarize(precip = sum(precip)) %>% 
-  ggplot(aes(x=month, y = precip, col = as.factor(year), group = year, alpha = year, size = year)) +
-  geom_line() +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank())
-
-
-
-
-
-
-
-
-
-
-
-metro <- locations %>% 
-  #filter(!(state %in% c("AK", "HI", "PR", "VI"))) %>% 
-  # select(id, city = city_ascii, state = state_id, lat0, lon0, lat, lon) %>% 
-  left_join(pleasant_summary, by = c("lat0", "lon0")) %>% 
-  mutate(pleasant_cat = case_when(pleasant >=200 ~ "Over 200",
-                                  pleasant >=150 ~ "150 - 199",
-                                  pleasant >=100 ~ "100 - 149",
-                                  TRUE ~ "Less than 100"),
-         pleasant_cat = factor(pleasant_cat, levels = c("Less than 100", "100 - 149", "150 - 199", "Over 200")))
-
-top_metro <- metro %>% 
-  group_by(lat0, lon0, pleasant) %>% 
-  summarise(loc = paste(name, collapse = ", "))
-
-
-
-weather_summary <- pleasant %>% 
-  group_by(lon0, lat0) %>% 
-  summarise(pleasant = sum(pleasant)) %>% 
-  semi_join(dots, by = c("lat0", "lon0")) %>% 
-  mutate(pleasant200 = if_else(pleasant >= 200, 1, 0),
-         pleasant150 = if_else(pleasant >= 150, 1, 0),
-         pleasant_cat = case_when(pleasant >=200 ~ "Over 200",
-                                  pleasant >=150 ~ "150 - 199",
-                                  pleasant >=100 ~ "100 - 149",
-                                  TRUE ~ "Less than 100"),
-         pleasant_cat = factor(pleasant_cat, levels = c("Less than 100", "100 - 149", "150 - 199", "Over 200")))
-
-
-ggplot() + 
-  geom_point(data = dots, aes(x=lon0, y = lat0), col = "grey90", size = 6) +
-  geom_point(data = weather_summary, aes(x=lon0, y=lat0, col=pleasant), size = 6, alpha = 0.4) +
-  geom_point(data = weather_summary, aes(x=lon0, y=lat0, col=pleasant, alpha = pleasant), size = 6) + 
-  
-  scale_colour_gradient2(low = "grey90",
-                         high = "darkblue",
-                         
-                         na.value = "grey95") +
-  theme_fivethirtyeight() +
-  theme(legend.position="none",
-        axis.title=element_blank(),
-        axis.text=element_blank(),
-        axis.ticks=element_blank())+
-  labs(title = "Places with most pleasant days in a year",
-       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
-       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
-       taraskaduk.com | @taraskaduk")
-
-
-ggplot() + 
-  geom_point(data = dots, aes(x=lon0, y = lat0), col = "grey95", size = 6) +
-  geom_point(data = weather_summary, aes(x=lon0, y=lat0, col=pleasant_cat), size = 6) +
-  
-  scale_colour_manual(values = c("grey90", "#c6dbef", "#4292c6", "#084594"), name = "Pleasant days") +
-  
-  theme_fivethirtyeight() +
-  theme(
-    axis.title=element_blank(),
-    axis.text=element_blank(),
-    axis.ticks=element_blank())+
-  labs(title = "Places with most pleasant days in a year",
-       caption = "A pleasant day is a day when the min temp was over 45F, the max temp was under 85F, the mean temp was between 55F and 75F, no significant rain or snow. \n
-       Average of years 2012 - 2017 of NOAA Global Summary of the Day data\n
-       taraskaduk.com | @taraskaduk")
-
-
-
-
-pleasant %>% 
-  filter(lat0 == 48 & lon0 == -122) %>% 
-  ggplot(aes(x=yday, y = temp_mean, col = as.factor(pleasant))) + 
-  geom_point()
-
-pleasant %>% 
-  filter(lat0 == 48 & lon0 == -122) %>% 
-  ggplot(aes(x=yday, y = precip, col = as.factor(pleasant))) + 
-  geom_point()
-
-
-pleasant %>% 
-  filter(lat0 == 30 & lon0 == -82) %>% 
-  ggplot(aes(x=yday, y = temp_mean, col = as.factor(pleasant))) + 
-  geom_point()
-
-pleasant %>% 
-  filter(lat0 == 30 & lon0 == -82) %>% 
-  ggplot(aes(x=yday, y = precip, col = as.factor(pleasant))) + 
-  geom_point()
-
-pleasant %>% 
-  group_by(lon0, lat0) %>% 
-  summarise(pleasant = sum(pleasant)) %>% 
-  ggplot(aes(x=lon0, y=lat0, col=pleasant)) + 
-  geom_point(size = 3) + 
-  scale_color_continuous(low='white', high='red') +
-  theme_void()
-
-
-
 
