@@ -1,9 +1,10 @@
+setwd("weather")
+
 library(RANN)
 library(caret)
 library(lubridate)
 library(tidyverse)
 
-setwd("weather")
 load("data/1-import.RData")
 
 # 2.1 Tidy -----------------------------------------------------------------
@@ -20,7 +21,7 @@ stations_stable <- data_coords %>%
   count() %>% 
   group_by(stn, wban, lat, lon) %>% 
   summarise(min = min(n)) %>% 
-  filter(min > 365*0.75) %>% 
+  filter(min > 365*0.8) %>% 
   ungroup()
 
 
@@ -147,7 +148,8 @@ result_predicted <- result_summed %>%
          snow = if_else(is.na(snow), f_knn(df_pred = ., col = "snow"), snow),
          is_rain = if_else(is.na(is_rain), f_knn(df_pred = ., col = "is_rain"), is_rain),
          is_snow = if_else(is.na(is_snow), f_knn(df_pred = ., col = "is_snow"), is_snow)) %>% 
-  union_all(result_summed %>% filter(is_na == 0))
+  union_all(result_summed %>% filter(is_na == 0)) %>% 
+  select(-is_na)
 
 
 data <- result_predicted

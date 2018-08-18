@@ -107,14 +107,17 @@ data_weather <- weather_data_raw %>%
   # except for the one notated with an I
   
   # 2018-08-15 Change my mind - There is something weird about snow and precip. I may need to treat NAs as NAs...
+  # still can treat NA as 0 for snow though. Read the readme
   ##replace_na(replace = list(precip = 0, snow = 0)) %>% 
-  mutate(precip = precip / prcp_hours) %>% 
   mutate(is_fog     = as.integer(substr(frshtt, 1,1)),
          is_rain    = as.integer(substr(frshtt, 2,2)),
          is_snow    = as.integer(substr(frshtt, 3,3)),
          is_hail    = as.integer(substr(frshtt, 4,4)),
          is_thunder = as.integer(substr(frshtt, 5,5)),
          is_tornado = as.integer(substr(frshtt, 6,6))) %>% 
+  mutate(precip = if_else(is.na(precip) & is_rain == 0, 0, precip),
+         snow = if_else(is.na(snow) & is_snow == 0, 0, snow),
+         precip = precip / prcp_hours * 24) %>% 
   select(-frshtt, -prcp_hours)
 
 

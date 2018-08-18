@@ -1,10 +1,11 @@
+setwd("weather")
+
 library(ggthemes)
 library(scales)
 library(maps)
 library(lubridate)
 library(tidyverse)
 
-setwd("weather")
 load("data/2-tidy.RData")
 
 
@@ -14,11 +15,12 @@ load("data/2-tidy.RData")
 # https://en.wikipedia.org/wiki/Rain#Intensity
 
 
-p_temp_max <- 85
-p_temp_min <- 40 #lowest for only one extra layer of clothing
-p_temp_mean_low <- 50
-p_temp_mean_high <- 75
-p_precip <- 0.1
+p_temp_max <- c(65, 85) #65 - "if it didn't get up to 65F in the warmest hour..."
+p_temp_min <- c(40, 70) #lowest would be night + sunrise temp. Let's rule out near freezing temps.
+                        #the upper limit is "when even the lowest night temp is too hot..."
+p_temp_mean <- c(55, 75)
+p_precip <- 0.15* 24
+p_snow <- 1
 
 
 pleasant <- data %>% 
@@ -29,37 +31,33 @@ pleasant <- data %>%
          lon0 = round(lon,0),
          lat05 = round(2*lat,0)/2,
          lon05 = round(2*lon,0)/2) %>% 
-  mutate(pleasant = if_else(temp_min >= p_temp_min &
-                              temp_max <= p_temp_max &
-                              temp_mean >= p_temp_mean_low & temp_mean <= p_temp_mean_high & 
-                              precip <= p_precip &
-                              is_rain < 0.5 &
-                              is_snow < 0.5,
+  mutate(pls_temp = case_when(temp_min > p_temp_min[2] ~ 'hot',
+                              temp_min < p_temp_min[1] ~ 'cold',
+                              temp_max > p_temp_max[2] ~ 'hot',
+                              temp_max < p_temp_max[1] ~ 'cold',
+                              temp_mean > p_temp_mean[2] ~ 'hot',
+                              temp_mean < p_temp_mean[1] ~ 'cold',
+                              TRUE ~ "pleasant"),
+         pls_elements = if_else(precip <= p_precip &
+                                snow <= p_snow &
+                                is_rain < 0.5 &
+                                is_snow < 0.5, 
+                                "pleasant",
+                                "elements"),
+         pleasant = if_else(pls_temp == 'pleasant' & pls_elements == "pleasant",
                             1,
                             0),
-         hot = if_else(temp_max > p_temp_max |
-                         temp_mean > p_temp_mean_high,
-                       1,
-                       0),
-         cold = if_else(temp_min < p_temp_min |
-                          temp_mean < p_temp_mean_low,
-                        1,
-                        0),
-         elements = if_else(is_rain >= .5 |
-                              is_snow >= 0.5 |
-                              precip > 0.3,
-                            1, 0),
          distinct_class = case_when(pleasant == 1 ~ "pleasant",
-                                    hot == 1      ~ "hot",
-                                    elements == 1 ~ "elements",
-                                    cold == 1     ~ "cold",
+                                    pls_temp == "hot" ~ "hot",
+                                    pls_elements == "elements" ~ "elements",
+                                    pls_temp == "cold" ~ "cold",
                                     TRUE          ~ NA_character_),
          double_class =   case_when(pleasant == 1 ~ "pleasant",
-                                    hot == 1 & elements == 0  ~ "hot",
-                                    hot == 1 & elements == 1  ~ "hot & elements",
-                                    cold == 1 & elements == 0    ~ "cold",
-                                    cold == 1 & elements == 1    ~ "cold & elements",
-                                    elements == 1    ~ "elements",
+                                    pls_temp == "hot" & pls_elements != "elements"  ~ "hot",
+                                    pls_temp == "hot" & pls_elements == "elements"  ~ "hot & elements",
+                                    pls_temp == "cold" & pls_elements != "elements"  ~ "cold",
+                                    pls_temp == "cold" & pls_elements == "elements"  ~ "cold & elements",
+                                    pls_elements == "elements"    ~ "elements",
                                     TRUE          ~ NA_character_))
 
 
@@ -218,11 +216,6 @@ summary_metro <- pleasant %>%
 # Top 10? -----------------------------------------------------------------
 
 
-
-top25_metro <- summary_metro %>% 
-  filter(rank <= 25) %>% 
-  mutate(name2 = reorder(name, rank))
-
 pleasant %>% 
   inner_join(summary_metro %>% filter(rank <= 25), by = "geoid") %>% 
   filter(year == 2017) %>% 
@@ -255,7 +248,7 @@ ggsave("top25.png",
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(rank <= 50), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(rank <= 25), by = "geoid") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
@@ -274,7 +267,7 @@ pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(rank >= nrow(summary_metro) - 50), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(rank >= nrow(summary_metro) - 25), by = "geoid") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
