@@ -118,6 +118,7 @@ data_weather <- weather_data_raw %>%
   mutate(precip = if_else(is.na(precip) & is_rain == 0, 0, precip),
          snow = if_else(is.na(snow) & is_snow == 0, 0, snow),
          precip = precip / prcp_hours * 24) %>% 
+  mutate(date = as.Date(date)) %>% 
   select(-frshtt, -prcp_hours)
 
 

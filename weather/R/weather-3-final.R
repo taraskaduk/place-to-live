@@ -303,3 +303,23 @@ pleasant %>%
   theme(panel.grid.major = element_blank()) +
   coord_equal()
 
+
+
+
+
+pleasant %>% 
+  inner_join(summary_metro %>% filter(str_detect(name, "Philadelphia") == TRUE), by = "geoid") %>% 
+  mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
+  ggplot(aes(x=day, y = month, fill = double_class)) +
+  geom_tile(col = "black") +
+  facet_wrap(~year) +
+  theme_fivethirtyeight() + 
+  scale_fill_manual(values = c(pleasant = "#1a9641", 
+                               hot = "#d6604d", 
+                               cold = "#4393c3", 
+                               elements = "#bebada",
+                               `hot & elements` = "#ca0020",
+                               `cold & elements` = "#0571b0"), 
+                    name = "Distinct classification")+
+  theme(panel.grid.major = element_blank()) +
+  coord_equal()

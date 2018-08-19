@@ -9,63 +9,131 @@ load("data/1-import.RData")
 
 # 2.1 Tidy -----------------------------------------------------------------
 
-stations_join <- stations_us %>% 
-  select(usaf, wban, lat, lon)
+# stations_join <- stations_us %>% 
+#   select(usaf, wban, lat, lon)
 
-data_coords <- data_weather %>% 
-  inner_join(stations_join, by = c('stn' = 'usaf', 'wban'))
-
-#This creates a list of stations with consistent observations over time
-stations_stable <- data_coords %>% 
-  group_by(stn, wban, lat, lon, year(date)) %>% 
-  count() %>% 
-  group_by(stn, wban, lat, lon) %>% 
-  summarise(min = min(n)) %>% 
-  filter(min > 365*0.8) %>% 
-  ungroup()
+# data_coords <- data_weather %>% 
+#   inner_join(stations_join, by = c('stn' = 'usaf', 'wban'))
 
 
-nn <- nn2(data = stations_stable %>% select(lat,lon),
+
+## Previously, I was trying to get average readings for 3-5 closest stations to each city, and was using RANN's ANN algo to find the nearest neighbors,
+## but also to predict the missing values.
+## I was getting some weird results, particularly for Philly, where my outcome was ZERO rainy or snowy days in 5 years.
+## (I was isolating Philly early - I wasn't getting the same results)
+
+## I am thinking I should do something else now - treat each metric as an observation, and for each day find
+
+data_weather$date <- as.Date(data_weather$date)
+
+data_tidy <- data_weather %>% 
+  mutate(precip = if_else(is.na(precip) & is_rain == 0, 0, precip),
+         is_element = if_else(is_rain + is_hail + is_snow > 0, 1, 0))
+
+data_gather <- data_tidy %>% 
+  select(stn:snow, is_element) %>% 
+  gather(metric, value, -c(stn:date)) %>% 
+  filter(!is.na(value))
+
+
+# add st index - we'll need it later for joining
+stations_us <- stations_us %>% 
+  mutate(index_st = as.integer(rownames(.)))
+
+locations <- locations %>% 
+  mutate(index_loc = as.integer(rownames(.)))
+
+# Find the closest neighbors for each city among stations
+nn <- nn2(data = stations_us %>% select(lat,lon),
           query = locations %>% select(lat,lon),
           k = 5)
 
-
 ##So, radius var in nn2 foesn't seem to filter out stations far away. PR ends up pulling Miami stations. The next sequence addresses it.
 nn1_df <- as_data_frame(nn[[1]]) %>% 
-  mutate(i = rownames(.)) %>% 
-  gather(V, index, V1:V5)
+  mutate(index_loc = as.integer(rownames(.))) %>% 
+  gather(V, index_st, V1:V5)
   
 nn2_df <- as_data_frame(nn[[2]]) %>% 
-  mutate(i = rownames(.)) %>% 
+  mutate(index_loc = as.integer(rownames(.))) %>% 
   gather(V, dist, V1:V5)
   
 nn_df <- nn1_df %>% 
-  inner_join(nn2_df, by = c("i", "V")) %>% 
+  inner_join(nn2_df, by = c("index_loc", "V")) %>% 
   #and this is where I filter out remote locations
-  mutate(index = if_else(dist <= 2, index, NA_integer_))
-
-nn_df_spread <- nn_df %>% 
-  select(-dist) %>% 
-  spread(V, index)
-
-index_leave <- nn_df$index %>% as.vector() %>%  unique()
+  filter(dist <= 2) %>% 
+  mutate(rank = str_remove(V, "V") %>% as.integer()) %>% 
+  select(-c(V,dist))
 
 
-## This one create a column rather than filters out. Uncomment - Imma filter out this time
-#data_stable$nn <- rownames(data_stable) %in% index_leave
-
-stations_nn <- stations_stable %>% 
-  mutate(index = rownames(.)) %>% 
-  .[index_leave, ]
 
 
-data_nn <- data_coords %>% 
-  inner_join(stations_nn %>% select(stn, wban, index), by = c("stn", "wban"))
+## add a new prikey - index - to the data
+data_join <- data_gather %>% 
+  inner_join(stations_us %>% select(usaf, wban, index_st), by = c('stn' = 'usaf', 'wban')) %>% 
+  select(-c(stn, wban))
+
+
+##rm(nn1_df, nn2_df, nn, data_weather, data_gather)
+
+
+## Now to the big join.
+## First, take locations.
+## Then, find 5 closest stations for each
+## Then, join the actual data from each station
+## Lastly, filter to return the top reading
+
+nn_subset <- nn_df %>% 
+  filter(rank == 1)
+
+
+locations_join <- locations %>% 
+  select(index_loc) %>% 
+  left_join(nn_subset, by = "index_loc") %>% 
+  # join dates - daily grain from 2013 to 2017
+  merge(tibble(date = seq.Date(date("2013-01-01"), date("2017-12-31"), by = "day")), all = TRUE) %>% 
+  merge(tibble(metric = c("temp_mean", "temp_max", "temp_min", "precip", "snow", "is_element")), all = TRUE)
+
+
+# ---------
+  ## TBD
+
+
+locs
+
+%>%
+  inner_join(data_forjoin, by = c("date", "index_st", "metric"))
+
+
+
+
+## This is a very slow piece of code. I guess I could have written a for loop to bring station observations one by one - 
+##... the closest one first, then for NAs - repeat again... etc.
+
+
+data_filtered <- data_joined %>% 
+  select(-index_st) %>% 
+  group_by(index_loc, date, metric) %>% 
+  arrange(rank) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+
+data_spread <- data_filtered %>% 
+  spread(metric, value)
+
+
+
+
+
+
+
+
 
 
 loc_nn <- locations %>% 
   mutate(i = rownames(.)) %>% 
   inner_join(nn_df_spread, by = "i")
+
+
 
 
 
@@ -78,7 +146,8 @@ result_gathered <- result_dummy %>%
   mutate(year = year(date),
          yday = yday(date)) %>% 
   gather(key = "neighbor", value = "index", c(V1:V3)) %>% 
-  mutate(index = as.character(index))
+  mutate(index = as.character(index)) %>% 
+  filter(!is.na(index))
 
 data_tojoin <- data_nn %>% 
   mutate(date = as.Date(date)) %>% 
