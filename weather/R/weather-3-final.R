@@ -24,9 +24,9 @@ p_snow <- 1
 
 
 pleasant <- data %>% 
-  left_join(locations %>% select(geoid, type, pop17), by = "geoid") %>% 
   mutate(day = day(date),
          month = month(date),
+         year = year(date),
          lat0 = round(lat,0),
          lon0 = round(lon,0),
          lat05 = round(2*lat,0)/2,
@@ -40,8 +40,7 @@ pleasant <- data %>%
                               TRUE ~ "pleasant"),
          pls_elements = if_else(precip <= p_precip &
                                 snow <= p_snow &
-                                is_rain < 0.5 &
-                                is_snow < 0.5, 
+                                is_element == 1, 
                                 "pleasant",
                                 "elements"),
          pleasant = if_else(pls_temp == 'pleasant' & pls_elements == "pleasant",
@@ -91,6 +90,7 @@ pleasant <- data %>%
 # MAP ---------------------------------------------------------------------
 
 pleasant_summary <- pleasant %>% 
+  
   group_by(geoid, lat05, lon05, year) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
@@ -191,8 +191,8 @@ ggplot() +
 
 
 
+
 summary_metro <- pleasant %>% 
-  filter(type == "Metro Area") %>% 
   group_by(geoid, name, year, pop17) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
@@ -235,12 +235,6 @@ pleasant %>%
                                elements = "#b3cde3"), 
                     name = "Distinct classification")+
   theme(panel.grid.major = element_blank()) 
-
-ggsave("top25.png",
-       width = 440,
-       height = 280,
-       units = "mm",
-       dpi = 250)
 
 
 

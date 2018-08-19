@@ -24,38 +24,77 @@ load("data/1-import.RData")
 
 ## I am thinking I should do something else now - treat each metric as an observation, and for each day find
 
-data_weather$date <- as.Date(data_weather$date)
 
-data_tidy <- data_weather %>% 
-  mutate(precip = if_else(is.na(precip) & is_rain == 0, 0, precip),
-         is_element = if_else(is_rain + is_hail + is_snow > 0, 1, 0))
-
-data_gather <- data_tidy %>% 
-  select(stn:snow, is_element) %>% 
-  gather(metric, value, -c(stn:date)) %>% 
-  filter(!is.na(value))
 
 
 # add st index - we'll need it later for joining
-stations_us <- stations_us %>% 
-  mutate(index_st = as.integer(rownames(.)))
 
 locations <- locations %>% 
+  filter(type == "Metro Area") %>% 
   mutate(index_loc = as.integer(rownames(.)))
+
+data_weather$date <- as.Date(data_weather$date)
+
+
+stations_stable <- data_weather %>% 
+  group_by(stn, wban, year(date)) %>% 
+  count() %>% 
+  group_by(stn, wban) %>% 
+  summarise(min = min(n)) %>% 
+  filter(min > 365*0.7) %>% 
+  ungroup()
+
+
+stations_us <- stations_us %>% 
+  semi_join(stations_stable, by = c('usaf'='stn', 'wban')) %>% 
+  mutate(index_st = as.integer(rownames(.)))
+
+
+stations_join <- stations_us %>% 
+  select(usaf, wban, index_st)
+
+data_weather <- data_weather %>% 
+  inner_join(stations_join, by = c('stn' = 'usaf', 'wban')) %>% 
+  select(-stn, -wban)
+
+
+data_tidy <- data_weather %>% 
+  mutate(precip = if_else(is.na(precip) & is_rain == 0, 0, precip),
+         is_element = if_else(is_rain + is_hail + is_snow > 0, 1, 0)) %>% 
+  select(index_st, date:snow, is_element)
+
+data_gather <- data_tidy %>% 
+  gather(metric, value, -c(index_st:date)) %>% 
+  filter(!is.na(value))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Find the closest neighbors for each city among stations
 nn <- nn2(data = stations_us %>% select(lat,lon),
           query = locations %>% select(lat,lon),
-          k = 5)
+          k = 8)
 
 ##So, radius var in nn2 foesn't seem to filter out stations far away. PR ends up pulling Miami stations. The next sequence addresses it.
 nn1_df <- as_data_frame(nn[[1]]) %>% 
   mutate(index_loc = as.integer(rownames(.))) %>% 
-  gather(V, index_st, V1:V5)
+  gather(V, index_st, V1:V8)
   
 nn2_df <- as_data_frame(nn[[2]]) %>% 
   mutate(index_loc = as.integer(rownames(.))) %>% 
-  gather(V, dist, V1:V5)
+  gather(V, dist, V1:V8)
   
 nn_df <- nn1_df %>% 
   inner_join(nn2_df, by = c("index_loc", "V")) %>% 
@@ -64,13 +103,6 @@ nn_df <- nn1_df %>%
   mutate(rank = str_remove(V, "V") %>% as.integer()) %>% 
   select(-c(V,dist))
 
-
-
-
-## add a new prikey - index - to the data
-data_join <- data_gather %>% 
-  inner_join(stations_us %>% select(usaf, wban, index_st), by = c('stn' = 'usaf', 'wban')) %>% 
-  select(-c(stn, wban))
 
 
 ##rm(nn1_df, nn2_df, nn, data_weather, data_gather)
@@ -82,146 +114,46 @@ data_join <- data_gather %>%
 ## Then, join the actual data from each station
 ## Lastly, filter to return the top reading
 
-nn_subset <- nn_df %>% 
-  filter(rank == 1)
 
-
-locations_join <- locations %>% 
+locations_tojoin <- locations %>% 
   select(index_loc) %>% 
-  left_join(nn_subset, by = "index_loc") %>% 
   # join dates - daily grain from 2013 to 2017
   merge(tibble(date = seq.Date(date("2013-01-01"), date("2017-12-31"), by = "day")), all = TRUE) %>% 
   merge(tibble(metric = c("temp_mean", "temp_max", "temp_min", "precip", "snow", "is_element")), all = TRUE)
 
+data_final <- NULL
 
-# ---------
-  ## TBD
+for(i in 1:7) {
+  nn_sub <- nn_df %>% 
+    filter(rank == i)
+  
+  locations_missing <- locations_tojoin %>% 
+    left_join(nn_sub, by = "index_loc")
+    
+  data_joined <- locations_missing %>% 
+    left_join(data_gather, by = c("date", "index_st", "metric"))
+  
+  locations_tojoin <- data_joined %>% 
+    filter(is.na(value)) %>% 
+    select(-rank, -value, -index_st)
+    
+  data_final <- rbind(data_final, data_joined %>% filter(!is.na(value)))
+}
+  
+  ##merge(tibble(metric = c("temp_mean", "temp_max", "temp_min", "precip", "snow", "is_element")), all = TRUE)
 
 
-locs
-
-%>%
-  inner_join(data_forjoin, by = c("date", "index_st", "metric"))
-
-
-
-
-## This is a very slow piece of code. I guess I could have written a for loop to bring station observations one by one - 
-##... the closest one first, then for NAs - repeat again... etc.
-
-
-data_filtered <- data_joined %>% 
-  select(-index_st) %>% 
-  group_by(index_loc, date, metric) %>% 
-  arrange(rank) %>% 
-  filter(row_number() == 1) %>% 
-  ungroup()
-
-data_spread <- data_filtered %>% 
+data_spread <- data_final %>% 
+  select(-rank, -index_st) %>% 
   spread(metric, value)
 
+data <- data_spread %>% 
+  left_join(locations %>% select(geoid, index_loc, name, pop17, lat, lon), by = "index_loc") %>% 
+  replace_na(list(snow = 0, precip = 0)) %>% 
+  mutate(temp_max = if_else(is.na(temp_max), 2*temp_mean - temp_min, temp_max),
+         temp_min = if_else(is.na(temp_max), 2*temp_mean - temp_max, temp_min))
 
 
-
-
-
-
-
-
-
-loc_nn <- locations %>% 
-  mutate(i = rownames(.)) %>% 
-  inner_join(nn_df_spread, by = "i")
-
-
-
-
-
-result_dummy <- loc_nn %>% 
-  select(geoid, name, lat, lon, V1:V3) %>% 
-  distinct() %>% 
-  merge(tibble(date = seq.Date(date("2013-01-01"), date("2017-12-31"), by = "day")), all = TRUE)
-
-result_gathered <- result_dummy %>% 
-  mutate(year = year(date),
-         yday = yday(date)) %>% 
-  gather(key = "neighbor", value = "index", c(V1:V3)) %>% 
-  mutate(index = as.character(index)) %>% 
-  filter(!is.na(index))
-
-data_tojoin <- data_nn %>% 
-  mutate(date = as.Date(date)) %>% 
-  select(index, date, temp_mean:snow, is_rain, is_snow)
-
-result_joined <- result_gathered %>% 
-  left_join(data_tojoin, by=c("index", "date"))
-
-
-
-result_summed <- result_joined %>% 
-  group_by(geoid, name, lat, lon, date, year, yday) %>% 
-  summarise(temp_mean = mean(temp_mean, na.rm = TRUE),
-            temp_min = mean(temp_min, na.rm = TRUE),
-            temp_max = mean(temp_max, na.rm = TRUE),
-            precip = max(precip, na.rm = TRUE),
-            snow = max(snow, na.rm = TRUE),
-            is_rain = max(is_rain, na.rm = TRUE),
-            is_snow = max(is_snow, na.rm = TRUE)) %>% 
-  ungroup() %>% 
-  purrr::map_at(c('temp_mean', 'temp_min', 'temp_max', 'precip', 'snow', "is_rain", "is_snow"), ~ifelse(is.nan(.x) | is.infinite(.x), NA, .x)) %>% 
-  bind_rows() %>% 
-  mutate(is_na = if_else(rowSums(is.na(.)) > 0, 1, 0))
-
-
-
-
-
-
-knn_train <- data_nn %>% 
-  select(lat, lon, date:snow, is_rain, is_snow) %>% 
-  mutate(year = year(date),
-         yday = yday(date))
-
-
-
-f_knn <- function(df_train = knn_train, 
-                  df_pred, col){
-  
-  nn <- nn2(data = df_train %>% select(lat,lon,yday,year),
-            query = df_pred %>% select(lat,lon,yday,year),
-            k = 5)
-  i_nn <- nn[[1]] %>% as.vector() %>% unique()
-  
-  df_train_nn <- df_train[i_nn, ]
-  
-  formula <- as.formula(substitute(col ~ lat + lon + yday + year, list(col = as.name(col))))
-  knn_model <- knnreg(formula = formula, 
-                      data = df_train_nn,
-                      k = 5)
-  col <- quo_name(enquo(col))
-  
-  predict(knn_model, newdata = df_pred)
-  
-}
-
-
-## This is where it will probably choke...
-
-result_predicted <- result_summed %>%
-  filter(is_na == 1) %>% 
-  ##I just can't work this into the function... I give up
-  mutate(temp_mean = if_else(is.na(temp_mean), f_knn(df_pred = ., col = "temp_mean"), temp_mean),
-         temp_max = if_else(is.na(temp_max), f_knn(df_pred = ., col = "temp_max"), temp_max),
-         temp_min = if_else(is.na(temp_min), f_knn(df_pred = ., col = "temp_min"), temp_min),
-         precip = if_else(is.na(precip), f_knn(df_pred = ., col = "precip"), precip),
-         snow = if_else(is.na(snow), f_knn(df_pred = ., col = "snow"), snow),
-         is_rain = if_else(is.na(is_rain), f_knn(df_pred = ., col = "is_rain"), is_rain),
-         is_snow = if_else(is.na(is_snow), f_knn(df_pred = ., col = "is_snow"), is_snow)) %>% 
-  union_all(result_summed %>% filter(is_na == 0)) %>% 
-  select(-is_na)
-
-
-data <- result_predicted
 
 ## Checkpoint
 save(data, locations, file = "data/2-tidy.RData")
