@@ -31,6 +31,7 @@ load("data/1-import.RData")
 
 locations <- locations %>% 
   filter(type == "Metro Area") %>% 
+  ##filter(str_detect(name, "San Francisco") == TRUE) %>% 
   mutate(index_loc = as.integer(rownames(.)))
 
 data_weather$date <- as.Date(data_weather$date)

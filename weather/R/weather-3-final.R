@@ -40,7 +40,7 @@ pleasant <- data %>%
                               TRUE ~ "pleasant"),
          pls_elements = if_else(precip <= p_precip &
                                 snow <= p_snow &
-                                is_element == 1, 
+                                is_element == 0, 
                                 "pleasant",
                                 "elements"),
          pleasant = if_else(pls_temp == 'pleasant' & pls_elements == "pleasant",
