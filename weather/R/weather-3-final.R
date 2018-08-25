@@ -6,7 +6,8 @@ library(maps)
 library(lubridate)
 library(tidyverse)
 
-load("data/2-tidy.RData")
+load("data/2-tidy-data.RData")
+load("data/locations.RData")
 
 
 ## Notes
@@ -19,11 +20,14 @@ p_temp_max <- c(65, 85) #65 - "if it didn't get up to 65F in the warmest hour...
 p_temp_min <- c(40, 70) #lowest would be night + sunrise temp. Let's rule out near freezing temps.
                         #the upper limit is "when even the lowest night temp is too hot..."
 p_temp_mean <- c(55, 75)
-p_precip <- 0.15* 24
+p_precip <- 0.01
 p_snow <- 1
 
 
 pleasant <- data %>% 
+  left_join(locations %>% select(cbsafp, name, lat = intptlat, lon = intptlon, pop17), by = "cbsafp") %>% 
+  mutate(lat = as.numeric(lat),
+         lon = as.numeric(lon)) %>% 
   mutate(day = day(date),
          month = month(date),
          year = year(date),
@@ -31,7 +35,8 @@ pleasant <- data %>%
          lon0 = round(lon,0),
          lat05 = round(2*lat,0)/2,
          lon05 = round(2*lon,0)/2) %>% 
-  mutate(pls_temp = case_when(temp_min > p_temp_min[2] ~ 'hot',
+  mutate(is_element = if_else(is_rain + is_snow > 0, 1, 0),
+         pls_temp = case_when(temp_min > p_temp_min[2] ~ 'hot',
                               temp_min < p_temp_min[1] ~ 'cold',
                               temp_max > p_temp_max[2] ~ 'hot',
                               temp_max < p_temp_max[1] ~ 'cold',
@@ -39,8 +44,7 @@ pleasant <- data %>%
                               temp_mean < p_temp_mean[1] ~ 'cold',
                               TRUE ~ "pleasant"),
          pls_elements = if_else(precip <= p_precip &
-                                snow <= p_snow &
-                                is_element == 0, 
+                                snow <= p_snow,
                                 "pleasant",
                                 "elements"),
          pleasant = if_else(pls_temp == 'pleasant' & pls_elements == "pleasant",
@@ -91,7 +95,7 @@ pleasant <- data %>%
 
 pleasant_summary <- pleasant %>% 
   
-  group_by(geoid, lat05, lon05, year) %>% 
+  group_by(cbsafp, lat05, lon05, year) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
   group_by(lat05, lon05) %>% 
@@ -193,10 +197,10 @@ ggplot() +
 
 
 summary_metro <- pleasant %>% 
-  group_by(geoid, name, year, pop17) %>% 
+  group_by(cbsafp, name, year, pop17) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
-  group_by(geoid, name, pop17) %>% 
+  group_by(cbsafp, name, pop17) %>% 
   summarise(pleasant = mean(pleasant)) %>% 
   ungroup() %>% 
   mutate(rank = row_number(desc(pleasant)),
@@ -217,7 +221,7 @@ summary_metro <- pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(rank <= 25), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(rank <= 25), by = "cbsafp") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = distinct_class)) +
@@ -242,7 +246,7 @@ pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(rank <= 25), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(rank <= 25), by = "cbsafp") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
@@ -261,7 +265,7 @@ pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(rank >= nrow(summary_metro) - 25), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(rank >= nrow(summary_metro) - 25), by = "cbsafp") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
@@ -280,7 +284,7 @@ pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(pop17 > 1000000), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(pop17 > 1000000), by = "cbsafp") %>% 
   filter(year == 2017) %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
@@ -302,7 +306,7 @@ pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(str_detect(name, "Philadelphia") == TRUE), by = "geoid") %>% 
+  inner_join(summary_metro %>% filter(str_detect(name, "Jacksonville, FL") == TRUE), by = "cbsafp") %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
   geom_tile(col = "black") +

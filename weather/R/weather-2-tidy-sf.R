@@ -4,8 +4,6 @@ library(RANN)
 library(caret)
 library(lubridate)
 library(tidyverse)
-library(sf)
-library(tigris)
 
 load("data/1-import.RData")
 

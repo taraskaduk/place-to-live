@@ -1,8 +1,14 @@
 setwd("weather")
 
-library(maps)
 library(lubridate)
 library(tidyverse)
+
+
+
+# Load --------------------------------------------------------------------
+
+load("data/locations.RData")
+load("data/stations.RData")
 
 
 
@@ -11,7 +17,7 @@ library(tidyverse)
 weather_data_raw <- NULL
 p_yearend <- year(Sys.Date()) - 1
 
-for (year in 2013:p_yearend) {
+for (year in (p_yearend-4):p_yearend) {
   
   destfile <- paste0('data/0-raw/gsod/gsod_',year,'.op.gz')
   path_untar <- 'data/0-raw/gsod/untar'
@@ -19,7 +25,7 @@ for (year in 2013:p_yearend) {
   
   
   files_all <- list.files(path = path_untar)
-  files_stations <- paste0(stations_us$usaf, "-", stations_us$wban, "-", year, ".op.gz")
+  files_stations <- paste0(stations$usaf, "-", stations$wban, "-", year, ".op.gz")
   files_keep <- subset(files_all, files_all %in% files_stations)
   
   
@@ -42,8 +48,8 @@ for (year in 2013:p_yearend) {
 
 # 1.2.2 Clean weather data ------------------------------------------------------
 
-data_weather <- weather_data_raw %>%
-  select(stn, wban, date, temp_mean, temp_min, temp_max, precip = prcp, snow = sndp, pressure = stp, wind = wdsp, gust, frshtt) %>%
+data <- weather_data_raw %>%
+  select(usaf = stn, wban, date, temp_mean, temp_min, temp_max, precip = prcp, snow = sndp, pressure = stp, wind = wdsp, gust, frshtt) %>%
   ##read txt file for instructions. Different letters designate different periods during which the data was collected.
   mutate(prcp_hours = case_when(str_detect(precip, "A") ~ 6,
                                 str_detect(precip, "B") ~ 12,
@@ -74,12 +80,12 @@ data_weather <- weather_data_raw %>%
   mutate(precip = if_else(is.na(precip) & is_rain == 0, 0, precip),
          snow = if_else(is.na(snow) & is_snow == 0, 0, snow),
          precip = precip / prcp_hours) %>% ##hourly precip
-  replace_na(replace = list(precip = 0, snow = 0)) %>% 
   mutate(date = as.Date(date)) %>% 
   select(-frshtt, -prcp_hours)
 
 
 
 # 1.4 Save necessary data -----------------------------------------------------
-save(data_weather, stations_us, locations, file = "data/1-import.RData")
-
+save(stations, file = "data/stations.RData")
+save(locations, file = "data/locations.RData")
+save(data, file = "data/data.RData")

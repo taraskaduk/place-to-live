@@ -1,81 +1,31 @@
 setwd("weather")
 
-library(maps)
-library(lubridate)
 library(tidyverse)
 library(sf)
 library(tigris)
 library(readxl)
 
 
-
-
-msa <- core_based_statistical_areas()
-msa_sf <- msa %>% st_as_sf()
-
-
-
-
-
-
-
-# Principal cities --------------------------------------------------------
-
-cbsa_principal_cities <- read_excel("data/0-raw/more data from census/cbsa-principal-cities.xls", 
-                                    col_types = c("text", "text", "text", 
-                                                  "text", "text", "text",
-                                                  "skip", "skip", "skip",
-                                                  "skip"),
-                                    col_names = c("cbsa_code", "cbsa_title", "cbsa_flag", "principal_city", "fips_st", "fips_place"),
-                                    skip = 2
-                                    )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 1.3 Import locations ------------------------------------------------------------
-
 path_raw <- "data/0-raw/"
-path_msa <- paste0(path_raw,"2015_Gaz_cbsa_national.txt")
-
-locations <- read_delim(path_msa, 
-                        "\t", escape_double = FALSE, 
-                        locale = locale(encoding = "LATIN1", 
-                                        asciify = TRUE),
-                        col_types = cols(ALAND = col_skip(), 
-                                         ALAND_SQMI = col_skip(), 
-                                         AWATER = col_skip(), 
-                                         AWATER_SQMI = col_skip(),
-                                         GEOID = col_character()), 
-                        trim_ws = TRUE) %>% 
-  rename(csafp = CSAFP,
-         geoid = GEOID,
-         name = NAME,
-         lat = INTPTLAT,
-         lon = INTPTLONG,
-         type = CBSA_TYPE) %>% 
-  select(-type) %>% 
-  separate(name, c("name", "type"), sep = -10) %>% 
-  mutate(name = trimws(name)) 
 
 
-path_msa_pop <- paste0(path_raw,"PEP_2017_PEPANNRES_with_ann.csv")
-locations_pop <- read_csv(path_msa_pop, 
+
+# CBSAs and CSAs ----------------------------------------------------------
+
+locs_cbsa <- core_based_statistical_areas() %>% 
+  st_as_sf()
+colnames(locs_cbsa) <- tolower(colnames(locs_cbsa))
+
+locs_csa <- combined_statistical_areas() %>% 
+  st_as_sf()
+colnames(locs_csa) <- tolower(colnames(locs_csa))
+
+
+
+# Population --------------------------------------------------------------
+
+path_pop <- paste0(path_raw,"PEP_2017_PEPANNRES_with_ann.csv")
+pop <- read_csv(path_pop, 
                           col_types = cols(GEO.id2 = col_character()),
                           locale = locale(encoding = "LATIN1", 
                                           asciify = TRUE),
@@ -85,53 +35,37 @@ locations_pop <- read_csv(path_msa_pop,
          pop10 = rescen42010,
          pop17 = respop72017)
 
-locations <- left_join(locations, locations_pop, by = "geoid") %>% 
-  mutate(lat0 = round(lat,0),
-         lon0 = round(lon,0),
-         lat05 = round(2*lat,0)/2,
-         lon05 = round(2*lon,0)/2)
+
+
+locs_cbsa <- locs_cbsa %>% 
+  left_join(pop, by = "geoid")
+
+st_geometry(locs_cbsa) <- NULL
+
+
+## Principal cities --------------------------------------------------------
+# 
+# cbsa_principal_cities <- read_excel(paste0(path_raw,"cbsa-principal-cities.xls"), 
+#                                     col_types = c("text", "text", "text", 
+#                                                   "text", "text", "text",
+#                                                   "skip", "skip", "skip",
+#                                                   "skip"),
+#                                     col_names = c("cbsafp", "cbsa_title", "cbsa_flag", "city", "fips_st", "fips_place"),
+#                                     skip = 3
+#                                     )
+# 
+# cbsa_join <- cbsa_principal_cities %>% 
+#   select(cbsafp, city) %>% 
+#   distinct()
+# 
+# 
+# locs_cbsa <- locs_cbsa %>% 
+#   left_join(cbsa_join, by = "cbsafp")
 
 
 
-ggplot() + 
-  theme_void() +
-  scale_x_continuous(limits = c(-125, -60)) +
-  scale_y_continuous(limits = c(25, 50)) +
-  coord_equal()+
-  geom_point(data = locations, aes(x=lon, y = lat, col = type),alpha = 0.3, size = 1)
-
-
-ggplot() + 
-  theme_void() +
-  scale_x_continuous(limits = c(-125, -60)) +
-  scale_y_continuous(limits = c(25, 50)) +
-  coord_equal()+
-  geom_point(data = locations, aes(x=lon0, y = lat0), col = 'blue',alpha = 0.3)
-
-ggplot() + 
-  theme_void() +
-  scale_x_continuous(limits = c(-125, -60)) +
-  scale_y_continuous(limits = c(25, 50)) +
-  coord_equal()+
-  geom_point(data = locations, aes(x=lon05, y = lat05), col = 'blue',alpha = 0.3)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+locations <- locs_cbsa
 
 # 1.4 Save necessary data -----------------------------------------------------
-save(data_weather, stations_us, locations, file = "data/1-import.RData")
+save(locations, file = "data/locations.RData")
 
