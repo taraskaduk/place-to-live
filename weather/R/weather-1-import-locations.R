@@ -40,7 +40,6 @@ pop <- read_csv(path_pop,
 locs_cbsa <- locs_cbsa %>% 
   left_join(pop, by = "geoid")
 
-st_geometry(locs_cbsa) <- NULL
 
 
 ## Principal cities --------------------------------------------------------
@@ -67,5 +66,5 @@ st_geometry(locs_cbsa) <- NULL
 locations <- locs_cbsa
 
 # 1.4 Save necessary data -----------------------------------------------------
-save(locations, file = "data/locations.RData")
+save(locations, file = "data/locations-import.RData")
 

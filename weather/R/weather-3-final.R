@@ -321,3 +321,4 @@ pleasant %>%
                     name = "Distinct classification")+
   theme(panel.grid.major = element_blank()) +
   coord_equal()
+
