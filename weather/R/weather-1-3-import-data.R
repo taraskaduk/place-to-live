@@ -86,4 +86,4 @@ data <- weather_data_raw %>%
 
 
 # 1.4 Save necessary data -----------------------------------------------------
-saveRDS(data, file = "data/data.RDS")
+saveRDS(data, file = "data/data-import.RDS")

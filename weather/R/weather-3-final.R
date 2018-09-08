@@ -6,8 +6,9 @@ library(maps)
 library(lubridate)
 library(tidyverse)
 
-load("data/2-tidy-data.RData")
-load("data/locations.RData")
+data <- readRDS("data/data-predicted.RDS")
+locations <- readRDS("data/locations-filtered.RDS")
+
 
 
 ## Notes
@@ -25,7 +26,7 @@ p_snow <- 1
 
 
 pleasant <- data %>% 
-  left_join(locations %>% select(cbsafp, name, lat = intptlat, lon = intptlon, pop17), by = "cbsafp") %>% 
+  left_join(locations %>% select(cbsafp, name, lsad, lat = intptlat, lon = intptlon, pop17), by = "cbsafp") %>% 
   mutate(lat = as.numeric(lat),
          lon = as.numeric(lon)) %>% 
   mutate(day = day(date),
@@ -196,7 +197,8 @@ ggplot() +
 
 
 
-summary_metro <- pleasant %>% 
+summary_metro <- pleasant %>%
+  filter(lsad == 'M1') %>% 
   group_by(cbsafp, name, year, pop17) %>% 
   summarise(pleasant = sum(pleasant)) %>% 
   ungroup() %>% 
@@ -205,7 +207,8 @@ summary_metro <- pleasant %>%
   ungroup() %>% 
   mutate(rank = row_number(desc(pleasant)),
          name2 = reorder(name, rank),
-         pop17 = as.integer(pop17))
+         pop17 = as.integer(pop17)) %>% 
+  filter(!is.na(rank))
 
 
 
@@ -306,7 +309,7 @@ pleasant %>%
 
 
 pleasant %>% 
-  inner_join(summary_metro %>% filter(str_detect(name, "Jacksonville, FL") == TRUE), by = "cbsafp") %>% 
+  inner_join(summary_metro %>% filter(str_detect(name, "Philadelphia") == TRUE), by = "cbsafp") %>% 
   mutate(month = factor(format(date, "%b"), levels = rev(month.abb))) %>% 
   ggplot(aes(x=day, y = month, fill = double_class)) +
   geom_tile(col = "black") +
