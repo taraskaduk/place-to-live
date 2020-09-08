@@ -1,0 +1,32 @@
+order,zone,name,group,color
+1,Af,Tropical rainforest climate,Tropical,#0000FE 
+2,Am,Tropical monsoon climate,Tropical,#0077FF
+3,Aw,Tropical savanna climate (dry winter),Tropical,#46A9FA
+4,As,Tropical savanna climate (dry summer),Tropical,#46A9FA
+5,BWh,Hot desert climate,Arid,#FE0000
+6,BWk,Cold desert climate,Arid,#FE9695
+7,BSh,Hot semi-arid climate,Arid,#F5A301
+8,BSk,Cold semi-arid climate,Arid,#FFDB63
+9,Csa,Hot-summer Mediterranean climate,Temperate,#FFFF00
+10,Csb,Warm-summer Mediterranean climate,Temperate,#C6C700
+11,Csc,Cold-summer Mediterranean climate,Temperate,#969600
+12,Cwa,Humid subtropical climate,Temperate,#96FF96
+13,Cwb,Subtropical highland climate,Temperate,#63C764
+14,Cwc,Subtropical highland climate,Temperate,#329633
+15,Cfa,Humid subtropical climate,Temperate,#C6FF4E
+16,Cfb,Oceanic climate,Temperate,#66FF33
+17,Cfc,Subpolar oceanic climate,Temperate,#33C701
+18,Dsa,Humid continental climate,Cold,#FF00FE
+19,Dsb,Humid continental climate,Cold,#C600C7
+20,Dsc,Subarctic climate,Cold,#963295
+21,Dsd,Subarctic climate,Cold,#966495
+22,Dwa,Humid continental climate,Cold,#ABB1FF
+23,Dwb,Humid continental climate,Cold,#5A77DB
+24,Dwc,Subarctic climate,Cold,#4C51B5
+25,Dwd,Subarctic climate,Cold,#320087
+26,Dfa,Humid continental climate,Cold,#00FFFF
+27,Dfb,Humid continental climate,Cold,#38C7FF
+28,Dfc,Subarctic climate,Cold,#007E7D
+29,Dfd,Subarctic climate,Cold,#00455E
+30,ET,Tundra climate,Polar,#B2B2B2
+31,EF,Ice cap climate,Polar,#686868

@@ -1,0 +1,305 @@
+iata,icao,city,country
+ADD,HAAB,Addis Ababa,Ethiopia
+ADJ,OJAM,Amman,Jordan
+ADL,YPAD,Adelaide,Australia
+AEP,SABE,Buenos Aires,Argentina
+AGR,VIAG,Agra,India
+ALY,HEAX,Alexandria,Egypt
+AMM,OJAI,Amman,Jordan
+AMS,EHAM,Amsterdam,Netherlands
+ANR,EBAW,Antwerp,Belgium
+APA,KAPA,Denver,United States
+ARN,ESSA,Stockholm,Sweden
+ATH,LGAV,Athens,Greece
+ATL,KATL,Atlanta,United States
+AUS,KAUS,Austin,United States
+AVL,KAVL,Asheville,United States
+BBU,LRBS,Bucharest,Romania
+BBX,KLOM,Philadelphia,United States
+BCN,LEBL,Barcelona,Spain
+BEG,LYBE,Belgrade,Serbia
+BEY,OLBA,Beirut,Lebanon
+BFI,KBFI,Seattle,United States
+BFS,EGAA,Belfast,United Kingdom
+BHD,EGAC,Belfast,United Kingdom
+BHX,EGBB,Birmingham,United Kingdom
+BIO,LEBB,Bilbao,Spain
+BKA,UUBB,Moscow,Russia
+BKK,VTBS,Bangkok,Thailand
+BMA,ESSB,Stockholm,Sweden
+BNA,KBNA,Nashville,United States
+BOG,SKBO,Bogota,Colombia
+BOI,KBOI,Boise,United States
+BOM,VABB,Mumbai,India
+BOS,KBOS,Boston,United States
+BQN,TJBQ,Aguadilla,Puerto Rico
+BRE,EDDW,Bremen,Germany
+BRS,EGGD,Bristol,United Kingdom
+BRU,EBBR,Brussels,Belgium
+BSB,SBBR,Brasilia,Brazil
+BTS,LZIB,Bratislava,Slovakia
+BUD,LHBP,Budapest,Hungary
+BUT,VQBT,Jakar,Bhutan
+BWU,YSBK,Sydney,Australia
+CAI,HECA,Cairo,Egypt
+CCU,VECC,Kolkata,India
+CDG,LFPG,Paris,France
+CEQ,LFMD,Cannes,France
+CGH,SBSP,Sao Paulo,Brazil
+CGK,WIII,Jakarta,Indonesia
+CGN,EDDK,Cologne,Germany
+CGX,KCGX,Chicago,United States
+CHC,NZCH,Christchurch,New Zealand
+CHS,KCHS,Charleston,United States
+CIA,LIRA,Rome,Italy
+CMB,VCBI,Colombo,Sri Lanka
+COK,VOCI,Kochi,India
+CPH,EKCH,Copenhagen,Denmark
+CPT,FACT,Cape Town,South Africa
+CRW,KCRW,Charleston,United States
+CUZ,SPZO,Cuzco,Peru
+CWE,HECW,Cairo,Egypt
+CWL,EGFF,Cardiff,United Kingdom
+CXH,CYHC,Vancouver,Canada
+DAC,VGZR,Dhaka,Bangladesh
+DBV,LDDU,Dubrovnik,Croatia
+DCA,KDCA,Washington,United States
+DEL,VIDP,Delhi,India
+DEN,KDEN,Denver,United States
+DIA,OTBD,Doha,Qatar
+DME,UUDD,Moscow,Russia
+DMK,VTBD,Bangkok,Thailand
+DOH,OTHH,Doha,Qatar
+DPS,WADD,Denpasar,Indonesia
+DRS,EDDC,Dresden,Germany
+DTM,EDLW,Dortmund,Germany
+DUB,EIDW,Dublin,Ireland
+DUS,EDDL,Duesseldorf,Germany
+DWC,OMDW,Dubai,United Arab Emirates
+DXB,OMDB,Dubai,United Arab Emirates
+ECV,LECU,Madrid,Spain
+EDI,EGPH,Edinburgh,United Kingdom
+ERS,FYWE,Windhoek,Namibia
+EVN,UDYZ,Yerevan,Armenia
+EWR,KEWR,Newark,United States
+EZE,SAEZ,Buenos Aires,Argentina
+FBU,ENFB,Oslo,Norway
+FCO,LIRF,Rome,Italy
+FLG,KFLG,Flagstaff,United States
+FLR,LIRQ,Florence,Italy
+FRA,EDDF,Frankfurt,Germany
+FTY,KFTY,Atlanta,United States
+FZO,EGTG,Bristol,United Kingdom
+GCJ,FAGC,Johannesburg,South Africa
+GDN,EPGD,Gdansk,Poland
+GIG,SBGL,Rio De Janeiro,Brazil
+GLA,EGPF,Glasgow,United Kingdom
+GLU,VQGP,Gelephu,Bhutan
+GML,UKKM,Kiev,Ukraine
+GMP,RKSS,Seoul,South Korea
+GOI,VAGO,Goa,India
+GOJ,UWGG,Nizhniy Novgorod,Russia
+GRU,SBGR,Sao Paulo,Brazil
+GVA,LSGG,Geneva,Switzerland
+GYD,UBBB,Baku,Azerbaijan
+GYE,SEGU,Guayaquil,Ecuador
+HAM,EDDH,Hamburg,Germany
+HAV,MUHA,Havana,Cuba
+HBE,HEBA,Alexandria,Egypt
+HEL,EFHK,Helsinki,Finland
+HEM,EFHF,Helsinki,Finland
+HEW,LGAT,Athens,Greece
+HEX,MDHE,Santo Domingo,Dominican Republic
+HFA,LLHA,Haifa,Israel
+HHP,VHST,Hong Kong,Hong Kong
+HKG,VHHH,Hong Kong,Hong Kong
+HLA,FALA,Johannesburg,South Africa
+HLP,WIHH,Jakarta,Indonesia
+HND,RJTT,Tokyo,Japan
+HNL,PHNL,Honolulu,United States
+IAD,KIAD,Washington,United States
+ICN,RKSI,Seoul,South Korea
+IEV,UKKK,Kiev,Ukraine
+IKA,OIIE,Tehran,Iran
+ISL,LTBA,Istanbul,Turkey
+IST,LTFM,Istanbul,Turkey
+ITM,RJOO,Osaka,Japan
+JAI,VIJP,Jaipur,India
+JAX,KJAX,Jacksonville,United States
+JFK,KJFK,New York,United States
+JIB,HDAM,Djibouti,Djibouti
+JNB,FAOR,Johannesburg,South Africa
+JRA,KJRA,New York,United States
+JRB,KJRB,New York,United States
+KBP,UKBB,Kiev,Ukraine
+KEL,EDHK,Kiel,Germany
+KIN,MKJP,Kingston,Jamaica
+KIX,RJBB,Osaka,Japan
+KRK,EPKK,Krakow,Poland
+KTM,VNKT,Kathmandu,Nepal
+KTP,MKTP,Kingston,Jamaica
+KUL,WMKK,Kuala Lumpur,Malaysia
+LAX,KLAX,Los Angeles,United States
+LBG,LFPB,Paris,France
+LCY,EGLC,London,United Kingdom
+LED,ULLI,St. Petersburg,Russia
+LEJ,EDDP,Leipzig,Germany
+LGA,KLGA,New York,United States
+LGW,EGKK,London,United Kingdom
+LHR,EGLL,London,United Kingdom
+LIM,SPIM,Lima,Peru
+LIN,LIML,Milan,Italy
+LIS,LPPT,Lisbon,Portugal
+LOS,DNMM,Lagos,Nigeria
+LPB,SLLP,La Paz,Bolivia
+LPL,EGGP,Liverpool,United Kingdom
+LTN,EGGW,London,United Kingdom
+LUX,ELLX,Luxemburg,Luxembourg
+LWO,UKLL,Lvov,Ukraine
+LXA,ZULS,Lhasa,China
+LYN,LFLY,Lyon,France
+LYS,LFLL,Lyon,France
+MAD,LEMD,Madrid,Spain
+MAN,EGCC,Manchester,United Kingdom
+MBW,YMMB,Melbourne,Australia
+MCF,KMCF,Tampa,United States
+MCO,KMCO,Orlando,United States
+MDL,VYMD,Mandalay,Burma
+MDW,KMDW,Chicago,United States
+MEB,YMEN,Melbourne,Australia
+MEL,YMML,Melbourne,Australia
+MEM,KMEM,Memphis,United States
+MEX,MMMX,Mexico City,Mexico
+MFM,VMMC,Macau,Macau
+MIA,KMIA,Miami,United States
+MLA,LMML,Malta,Malta
+MNL,RPLL,Manila,Philippines
+MRS,LFML,Marseille,France
+MSP,KMSP,Minneapolis,United States
+MSY,KMSY,New Orleans,United States
+MUC,EDDM,Munich,Germany
+MXP,LIMC,Milano,Italy
+NAP,LIRN,Naples,Italy
+NAY,ZBNY,Beijing,China
+NBG,KNBG,New Orleans,United States
+NBO,HKJK,Nairobi,Kenya
+NCE,LFMN,Nice,France
+NEW,KNEW,New Orleans,United States
+NRT,RJAA,Tokyo,Japan
+NYO,ESKN,Stockholm,Sweden
+NZY,KNZY,San Diego,United States
+OCW,KOCW,Washington,United States
+ODS,UKOO,Odessa,Ukraine
+OPF,KOPF,Miami,United States
+OPO,LPPR,Porto,Portugal
+ORD,KORD,Chicago,United States
+ORL,KORL,Orlando,United States
+ORY,LFPO,Paris,France
+OSF,UUMO,Moscow,Russia
+OSL,ENGM,Oslo,Norway
+OTP,LROP,Bucharest,Romania
+OZP,LEMO,Sevilla,Spain
+PBH,VQPR,Thimphu,Bhutan
+PCB,WIHP,Jakarta,Indonesia
+PDK,KPDK,Atlanta,United States
+PDX,KPDX,Portland,United States
+PEK,ZBAA,Beijing,China
+PHL,KPHL,Philadelphia,United States
+PKX,ZBAD,Beijing,China
+PMO,LICJ,Palermo,Italy
+PNE,KPNE,Philadelphia,United States
+POZ,EPPO,Poznan,Poland
+PRG,LKPR,Prague,Czech Republic
+PSA,LIRP,Pisa,Italy
+PVG,ZSPD,Shanghai,China
+PWM,KPWM,Portland,United States
+QRA,FAGM,Johannesburg,South Africa
+RAK,GMMX,Marrakech,Morocco
+RIX,EVRA,Riga,Latvia
+RKE,EKRK,Copenhagen,Denmark
+RKV,BIRK,Reykjavik,Iceland
+RML,VCCC,Colombo,Sri Lanka
+RNS,LFRN,Rennes,France
+RTM,EHRD,Rotterdam,Netherlands
+SAF,KSAF,Santa Fe,United States
+SAN,KSAN,San Diego,United States
+SAW,LTFJ,Istanbul,Turkey
+SCL,SCEL,Santiago,Chile
+SDM,KSDM,San Diego,United States
+SDQ,MDSD,Santo Domingo,Dominican Republic
+SDU,SBRJ,Rio De Janeiro,Brazil
+SDV,LLSD,Tel-aviv,Israel
+SEA,KSEA,Seattle,United States
+SFO,KSFO,San Francisco,United States
+SHA,ZSSS,Shanghai,China
+SIG,TJIG,San Juan,Puerto Rico
+SIN,WSSS,Singapore,Singapore
+SJJ,LQSA,Sarajevo,Bosnia and Herzegovina
+SJU,TJSJ,San Juan,Puerto Rico
+SKP,LWSK,Skopje,Macedonia
+SLC,KSLC,Salt Lake City,United States
+SNZ,SBSC,Rio De Janeiro,Brazil
+SOF,LBSF,Sofia,Bulgaria
+SSN,RKSM,Seoul East,South Korea
+SSZ,SBST,Santos,Brazil
+STL,KSTL,St. Louis,United States
+STN,EGSS,London,United Kingdom
+SVO,UUEE,Moscow,Russia
+SVQ,LEZL,Sevilla,Spain
+SXF,EDDB,Berlin,Germany
+SYD,YSSY,Sydney,Australia
+SZB,WMSA,Kuala Lumpur,Malaysia
+TBS,UGTB,Tbilisi,Georgia
+TGD,LYPG,Podgorica,Montenegro
+THF,EDDI,Berlin,Germany
+THR,OIII,Teheran,Iran
+TLL,EETN,Tallinn-ulemiste International,Estonia
+TLS,LFBO,Toulouse,France
+TLV,LLBG,Tel-aviv,Israel
+TNR,FMMI,Antananarivo,Madagascar
+TNT,KTNT,Miami,United States
+TOJ,LETO,Madrid,Spain
+TPA,KTPA,Tampa,United States
+TPE,RCTP,Taipei,Taiwan
+TPF,KTPF,Tampa,United States
+TSA,RCSS,Taipei,Taiwan
+TUN,DTTA,Tunis,Tunisia
+TXL,EDDT,Berlin,Germany
+UGN,KUGN,Chicago,United States
+UIO,SEQM,Quito,Ecuador
+VCE,LIPZ,Venice,Italy
+VIE,LOWW,Vienna,Austria
+VKO,UUWW,Moscow,Russia
+VNO,EYVI,Vilnius,Lithuania
+VNS,VIBN,Varanasi,India
+VTE,VLVT,Vientiane,Laos
+WAW,EPWA,Warsaw,Poland
+WBU,KBDU,Boulder,United States
+WDH,FYWH,Windhoek,Namibia
+WHP,KWHP,Los Angeles,United States
+WIL,HKNW,Nairobi,Kenya
+WLG,NZWN,Wellington,New Zealand
+WMI,EPMO,Warsaw,Poland
+XFW,EDHI,Hamburg,Germany
+XJD,OTBH,Doha,Qatar
+XSP,WSSL,Singapore,Singapore
+YBA,CYBA,Banff,Canada
+YCD,CYCD,Nanaimo,Canada
+YHU,CYHU,Montreal,Canada
+YHZ,CYHZ,Halifax,Canada
+YKZ,CYKZ,Toronto,Canada
+YMX,CYMX,Montreal,Canada
+YOW,CYOW,Ottawa,Canada
+YRO,CYRO,Ottawa,Canada
+YTZ,CYTZ,Toronto,Canada
+YUL,CYUL,Montreal,Canada
+YVR,CYVR,Vancouver,Canada
+YWG,CYWG,Winnipeg,Canada
+YWH,CYWH,Victoria,Canada
+YYJ,CYYJ,Victoria,Canada
+YYZ,CYYZ,Toronto,Canada
+YZD,CYZD,Toronto,Canada
+ZAG,LDZA,Zagreb,Croatia
+ZNA,CAC8,Nanaimo,Canada
+ZRH,LSZH,Zurich,Switzerland
+ZXT,UBTT,Baku,Azerbaijan

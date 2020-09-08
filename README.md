@@ -1,7 +1,1 @@
-TEST
-================
-Taras Kaduk
-6/19/2018
-
-Test
-----
+https://taraskaduk.com/2019/02/18/weather/
