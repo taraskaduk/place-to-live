@@ -158,7 +158,7 @@ summary_locations_edd <- data %>%
   filter(year < year(today())) %>% 
   left_join(locations, by = "cbsafp") %>% 
   rename(city = name) %>% 
-  group_by(cbsafp, name_short, lat, lon, year) %>% 
+  group_by(cbsafp, name_short, lsad, lat, lon, year) %>% 
   summarise(edd_total = sum(edd_total),
             edd_cold = sum(edd_cold),
             edd_hot = sum(edd_hot),
@@ -171,7 +171,7 @@ summary_locations_edd <- data %>%
   mutate(unknown = if_else(days >= 365, 0, 365 - days)) %>% 
   filter(unknown < 365 * 0.1) %>% 
   #filter(population >= 250000) %>% 
-  group_by(cbsafp, name_short, lat, lon) %>% 
+  group_by(cbsafp, name_short, lsad, lat, lon) %>% 
   summarise(edd_total = mean(edd_total),
             edd_cold = mean(edd_cold),
             edd_hot = mean(edd_hot),
@@ -192,7 +192,8 @@ ggplot(summary_locations_edd, aes(x = pleasant, y = edd_total))+
   theme(axis.title=element_text())
 ggsave("7.png")
 
-summary_locations_edd %>% 
+summary_locations_edd %>%
+  filter(lsad == "M1") %>% 
   mutate(top = if_else(rank <= 25, "Best 25", if_else(rank_rev <= 25, "Worst 25", NA_character_)),
          city = paste0(rank, ". ", city, ": ", round(edd_total,0), "/", round(edd_cold,0), "/", round(edd_hot,0)),
          city = reorder(city, rank_rev)) %>%
@@ -211,7 +212,7 @@ summary_locations_edd %>%
         axis.text.x = element_blank()) +
   labs(title = "Weather Unpleasantness Index",
        subtitle = "For cities with over 1M people in population",
-       caption = paste0("Labels: #Rank. City, Country: edd (area under curve) cold / edd hot / edd total",
+       caption = paste0("Labels: #Rank. City: edd (area under curve) cold / edd hot / edd total",
                         "\n", caption))
 ggsave("4.png")
 
@@ -219,7 +220,7 @@ ggsave("4.png")
 
 summary_locations_edd %>% 
   mutate(top = if_else(rank <= 25, "Best 25", if_else(rank_rev <= 25, "Worst 25", NA_character_)),
-         city = paste0(rank, ". ", city, ", ", country, ": ", round(edd_cold,0), "/", round(edd_hot,0), "/", round(edd_total,0)),
+         city = paste0(rank, ". ", city, ": ", round(edd_cold,0), "/", round(edd_hot,0), "/", round(edd_total,0)),
          city = reorder(city, rank_rev)) %>%
   filter(!is.na(top)) %>% 
   ggplot(aes(x=city)) +
@@ -235,7 +236,7 @@ summary_locations_edd %>%
         panel.grid.major.y = element_blank()) +
   labs(title = "Weather Unpleasantness Index",
        subtitle = "For cities with over 1M people in population",
-       caption = paste0("Labels: #Rank. City, Country: edd (area under curve) cold / edd hot / edd total",
+       caption = paste0("Labels: #Rank. City: edd (area under curve) cold / edd hot / edd total",
                         "\n", caption))
 ggsave("6.png")
 
@@ -293,7 +294,108 @@ data_edd %>%
        caption = "Your caption")
 
 
+library(spData)
+library(tigris)
+
+loadd(locations_sf)
+
+counties <- tigris::counties() %>% 
+  st_as_sf() %>% 
+  st_simplify(dTolerance = 0.01) %>% 
+  rename_all(tolower)
+
+counties_48 <- counties %>% 
+  filter(!(statefp %in% c(15,72,78,69,66,60,"02")))
+
+counties_hi <- counties %>% 
+  filter(statefp == 15)
+
+counties_ak <- counties %>% 
+  filter(statefp == 02)
+
+locations <- core_based_statistical_areas() %>%
+  st_as_sf() %>%
+  st_simplify(dTolerance = 0.01) %>% 
+  rename_all(tolower) %>%
+  mutate(name_short = str_sub(name,
+                              start = 1,
+                              end = if_else(is.na(str_locate(name,"-")[, 1]),
+                                            str_locate(name, ",")[, 1],
+                                            str_locate(name,"-")[, 1]) - 1),
+         lat=as.numeric(intptlat),
+         lon=as.numeric(intptlon)
+  )
+
+summary_sf <- summary_locations_edd %>% 
+  left_join(locations %>% select(cbsafp)) %>% 
+  st_as_sf()
+
+summary_48 <- summary_sf %>% 
+  filter(lat<50 & lon > -125 & lat > 23)
+
+summary_hi <- summary_sf %>% 
+  filter(lat<50 & lon < -125)
+
+summary_ak <- summary_sf %>% 
+  filter(lat>50)
+
+
+us_states_map = 
+  tm_shape(counties_48, projection = 2163) +
+  tm_fill(col="grey95") +
+  tm_borders(col="grey50") +
+  
+  tm_shape(summary_48, projection = 2163) +
+  tm_fill("edd_hot",
+              style="fixed", title = "",
+              breaks=c(0,500,1000,2000,3000,4000,5000),
+              # labels=c("< 2.0", "2.0 - 4.8", "4.8 - 8.2", "8.2 - 12.9",
+              #          "12.9 - 19.7", "19.7 - 26.5",
+              #          "> 26.5"),
+              palette="OrRd"
+          ) + 
+  tm_borders(col="grey40") +
+  
+  tm_layout(frame = FALSE,
+            legend.position = c(0.95,0.25),
+            title = "Annual Excess Heat Degree-Days\nfor Core-Based Statistical Areas in the contiguous states",
+            title.size = 12,
+            title.position = c("left", "top"),
+            inner.margins = c(0.1,0,0.15,0)) +
+  tm_credits("taraskaduk.com")
+
+us_states_map
 
 
 
+
+
+
+hawaii_map = tm_shape(hawaii) + 
+  tm_polygons(col="total_pop_15",
+              palette="PuBu") + 
+  tm_layout(title = "Hawaii", bg.color = NA, 
+            title.position = c("LEFT", "BOTTOM"),
+            title.size = 0.7,
+            legend.show = FALSE)
+
+alaska_map = tm_shape(alaska) + 
+  tm_polygons(col="total_pop_15",
+              palette="PuBu") + 
+  tm_layout(title = "Alaska", bg.color = NA,
+            title.size = 0.8,
+            legend.show = FALSE)
+
+
+us_states_map 
+print(hawaii_map, vp = grid::viewport(0.38, 0.1, width = 0.2, height = 0.1)) 
+print(alaska_map, vp = grid::viewport(0.15, 0.15, width = 0.3, height = 0.3))
+
+
+
+
+
+
+ggplot(data=summary_sf, aes(fill=edd_total)) +
+  geom_sf()
 
