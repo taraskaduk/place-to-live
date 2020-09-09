@@ -71,9 +71,9 @@ feels_like <- function(temp, rh, wind) {
 }
 
 
-# AUC of cosine function --------------------------------------------------
+# Excess Degree-Days -------------------------------------------------
 
-get_auc <- function(min, max, perfect = 18) {
+get_edd <- function(min, max, baseline = 18) {
   a <- (max-min)/2 #amplitude
   period <- 24
   b <- 2 * pi / period
@@ -82,40 +82,40 @@ get_auc <- function(min, max, perfect = 18) {
     -a * cos(b * x) + d
   }
   
-  if (min >= perfect) {
-    # integral <- -a*sin(24*b) + 24*d - 24*perfect
-    integral <- integrate(temperature, 0, 24)$value - perfect * 24 %>% 
+  if (min >= baseline) {
+    # integral <- -a*sin(24*b) + 24*d - 24*baseline
+    integral <- integrate(temperature, 0, 24)$value - baseline * 24 %>% 
       round(2)
-    area <- tibble(auc_hot = integral,  
-                   auc_cold = 0, 
-                   auc_total = integral)
+    edd <- tibble( edd_hot = round(integral/24,2),  
+                   edd_cold = 0, 
+                   edd_total = round(integral/24,2))
     
-  } else if (max <= perfect) {
-    integral <- perfect * 24 - integrate(temperature, 0, 24)$value %>% 
+  } else if (max <= baseline) {
+    integral <- baseline * 24 - integrate(temperature, 0, 24)$value %>% 
       round(2)
     
-    area <- tibble(auc_hot = 0,  
-                   auc_cold = integral, 
-                   auc_total = integral)
+    edd <- tibble( edd_hot = 0,  
+                   edd_cold = round(integral/24,2), 
+                   edd_total = round(integral/24,2))
     
   } else {
-    intercept1 <- acos((d - perfect) / a) / b
+    intercept1 <- acos((d - baseline) / a) / b
     intercept2 <- (12 - intercept1) * 2 + intercept1
     
     integral1 <-
-      perfect * intercept1 - integrate(temperature, 0, intercept1)$value
+      baseline * intercept1 - integrate(temperature, 0, intercept1)$value
     
     integral2 <-
-      integrate(temperature, intercept1, intercept2)$value - perfect * (intercept2 - intercept1) 
+      integrate(temperature, intercept1, intercept2)$value - baseline * (intercept2 - intercept1) 
     
     integral3 <-
-      perfect * (24 - intercept2) - integrate(temperature, intercept2, 24)$value 
+      baseline * (24 - intercept2) - integrate(temperature, intercept2, 24)$value 
     
-    area <- tibble(auc_hot = round(integral2,2),  
-                   auc_cold = round(integral1 + integral3,2), 
-                   auc_total = round(integral1 + integral2 + integral3,2))
+    edd <- tibble(edd_hot = round(integral2/24,2),  
+                   edd_cold = round((integral1 + integral3)/24,2), 
+                   edd_total = round((integral1 + integral2 + integral3)/24,2))
   }
-  return(area)
+  return(edd)
 }
 
 

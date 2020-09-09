@@ -478,52 +478,55 @@ full_data_filtered <- full_data %>%
   semi_join(data_check, by = "cbsafp")
 
 data_filtered <- data %>% 
-  semi_join(data_check, by = "cbsafp")
+  semi_join(data_check, by = "cbsafp") %>% 
+  filter(!is.na(temp_min) & !is.na(temp_max))
 
 save_locations <- write_csv(locations_filtered, "data/locations.csv")
 
-data_completed <- full_data_filtered %>%
-  select(cbsafp, date, temp_min, temp_max,
-         temp_mean, rh, wdsp, prcp) %>%
-  gather(metric, value,-c(cbsafp,date)) %>%
-  mutate(
-    flag = if_else(is.na(value), "missing",
-                   "train"),
-    year = year(date),
-    yday = yday(date)
-  ) %>%
-  group_by(cbsafp, metric, flag) %>%
-  nest() %>%
-  pivot_wider(names_from = flag,
-              values_from = data) %>%
-  filter(!is.na(missing) & !is.na(train)) %>%
-  mutate(lm = train %>% purrr::map(f_lm)) %>%
-  mutate(pred_lm = map2(.x = lm,
-                        .y = missing, .f = predict)) %>%
-  select(-c(train, lm)) %>%
-  unnest(c(missing, pred_lm)) %>%
-  mutate(value = pred_lm, flag = "predicted") %>%
-  select(cbsafp, date, metric, value, flag, yday, year) %>%
-  select(-flag) %>%
-  spread(metric, value) %>%
-  bind_rows(data_filtered)
-
-
-data_collapsed <- data_completed %>%
-  mutate(year = year(date), yday = yday(date)) %>%
-  group_by(cbsafp, date, year, date) %>%
-  summarise_all(max,
-                na.rm = TRUE) %>%
-  ungroup() %>%
-  mutate_at(vars(rh:i_snow_ice),
-            ~ if_else(is.nan(.x) | is.infinite(.x), NA_real_, .x)) %>%
-  mutate_at(vars(rh), round, digits = 2) %>%
-  mutate(
-    temp_mean_feel = feels_like(temp_mean,
-                                rh, wdsp),
-    temp_min_feel = feels_like(temp_min, rh, wdsp),
-    temp_max_feel = feels_like(temp_max, rh, wdsp)
-  )
+# data_completed <- full_data_filtered %>%
+#   select(cbsafp, date, temp_min, temp_max,
+#          temp_mean, rh, wdsp, prcp) %>%
+#   gather(metric, value,-c(cbsafp,date)) %>%
+#   mutate(
+#     flag = if_else(is.na(value) | is.null(value), "missing",
+#                    "train"),
+#     year = year(date),
+#     yday = yday(date)
+#   ) %>%
+#   group_by(cbsafp, metric, flag) %>% 
+#   nest() %>% 
+#   pivot_wider(names_from = flag,
+#               values_from = data) %>%
+#   filter(!is.na(missing) & !is.na(train) & 
+#            !is.null(missing) & !is.null(train) & 
+#            missing != "NULL" & train != "NULL") %>%
+#   mutate(lm = train %>% purrr::map(f_lm)) %>%
+#   mutate(pred_lm = map2(.x = lm,
+#                         .y = missing, .f = predict)) %>%
+#   select(-c(train, lm)) %>%
+#   unnest(c(missing, pred_lm)) %>%
+#   mutate(value = pred_lm, flag = "predicted") %>%
+#   select(cbsafp, date, metric, value, flag, yday, year) %>%
+#   select(-flag) %>%
+#   spread(metric, value) %>%
+#   bind_rows(data_filtered)
+# 
+# 
+# data_collapsed <- data_completed %>%
+#   mutate(year = year(date), yday = yday(date)) %>%
+#   group_by(cbsafp, date, year, date) %>%
+#   summarise_all(max,
+#                 na.rm = TRUE) %>%
+#   ungroup() %>%
+#   mutate_at(vars(rh:i_snow_ice),
+#             ~ if_else(is.nan(.x) | is.infinite(.x), NA_real_, .x)) %>%
+#   mutate_at(vars(rh), round, digits = 2) %>%
+#   mutate(
+#     temp_mean_feel = feels_like(temp_mean,
+#                                 rh, wdsp),
+#     temp_min_feel = feels_like(temp_min, rh, wdsp),
+#     temp_max_feel = feels_like(temp_max, rh, wdsp)
+#   )
 
 
 # Classify days into pleasant/hot/cold etc --------------------------------
@@ -537,8 +540,12 @@ params <- list(
   sndp = 50
 )
 
-data_daily <- data_collapsed %>%
+data_daily <- data_filtered %>%
   mutate(
+    temp_mean_feel = feels_like(temp_mean,
+                                rh, wdsp),
+    temp_min_feel = feels_like(temp_min, rh, wdsp),
+    temp_max_feel = feels_like(temp_max, rh, wdsp),
     hot = if_else(temp_min_feel > params$temp_hot_night |
                   temp_max_feel > params$temp_hot_day,
                   1, 0),
@@ -566,11 +573,14 @@ data_daily <- data_collapsed %>%
                         levels = c("pleasant", "elements", "cold", "hot")),
          sum = pleasant + elements + hot + cold)
 
-
+data_edd <- data_daily %>% 
+  bind_cols(map2_dfr(.$temp_min_feel, .$temp_max_feel, get_edd)) %>% 
+  mutate(year = year(date),
+         yday = yday(date))
 
 # Summarize ---------------------------------------------------------------
 
-summary_locations <- data_daily %>%
+summary_locations <- data_edd %>%
   group_by(cbsafp, year) %>%
   summarise_at(vars(pleasant,
                     elements, hot, cold), sum, na.rm = TRUE) %>%

@@ -7,7 +7,7 @@ library(sp)
 library(sf)
 library(tidycensus)
 
-#library(rnoaa)
+library(rnoaa)
 # library(spData)
 library(janitor)
 library(scales)
