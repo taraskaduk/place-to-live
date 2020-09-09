@@ -263,7 +263,7 @@ summary_locations_edd %>%
 ggsave("6.png", width = 11, height = 9, units = "in")
 
 
-
+saveRDS(summary_locations_edd, "summary_edd.RDS")
 
 
 
@@ -346,19 +346,19 @@ us_states_map =
   tm_borders(col="grey50") +
   
   tm_shape(summary_48, projection = 2163) +
-  tm_fill("edd_hot",
+  tm_fill("edd_total",
               style="fixed", title = "",
-              breaks=c(0,500,1000,2000,3000,4000,5000),
+              breaks=c(1500,2000,3000,4000,5000,6000,6500),
               # labels=c("< 2.0", "2.0 - 4.8", "4.8 - 8.2", "8.2 - 12.9",
               #          "12.9 - 19.7", "19.7 - 26.5",
               #          "> 26.5"),
-              palette="OrRd"
+              palette="-BrBG"
           ) + 
   tm_borders(col="grey40") +
   
   tm_layout(frame = FALSE,
-            legend.position = c(0.95,0.25),
-            title = "Annual Excess Heat Degree-Days\nfor Core-Based Statistical Areas in the contiguous states",
+            legend.position = c("left", "bottom"),
+            title = "Annual Total Excess Degree-Days\nfor Core-Based Statistical Areas in the contiguous states",
             title.size = 12,
             title.position = c("left", "top"),
             inner.margins = c(0.1,0,0.15,0)) +
@@ -366,7 +366,7 @@ us_states_map =
 
 us_states_map
 
-
+tmap_save(us_states_map, "edd_total.png", width=9, height = 7, units="in")
 
 
 
@@ -390,9 +390,6 @@ alaska_map = tm_shape(alaska) +
 us_states_map 
 print(hawaii_map, vp = grid::viewport(0.38, 0.1, width = 0.2, height = 0.1)) 
 print(alaska_map, vp = grid::viewport(0.15, 0.15, width = 0.3, height = 0.3))
-
-
-
 
 
 
